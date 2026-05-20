@@ -1,0 +1,5 @@
+board:
+  name: mini-keyboard
+  vendor: mingDev
+  socs:
+    - name: nrf52840

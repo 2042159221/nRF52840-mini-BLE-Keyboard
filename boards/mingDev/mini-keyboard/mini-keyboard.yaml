@@ -1,0 +1,10 @@
+identifier: mini-keyboard/nrf52840
+name: pro
+vendor: mingDev
+type: mcu
+arch: arm
+ram: 256
+flash: 1024
+toolchain:
+  - zephyr
+supported: []

@@ -1,1 +1,6 @@
 build*/
+.firecrawl/
+.vscode/.history/
+*.log
+*.tmp
+*.bak
