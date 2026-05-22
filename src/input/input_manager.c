@@ -13,6 +13,7 @@
 #include <hid/hid_report.h>
 #include <hid/hid_usage.h>
 #include <input/input_manager.h>
+#include <keymap/keymap.h>
 #include <mode/mode_manager.h>
 #include <transport/transport.h>
 
@@ -24,9 +25,15 @@ LOG_MODULE_REGISTER(input_manager, LOG_LEVEL_INF);
 static struct hid_keyboard_report keyboard_report;
 
 #if defined(CONFIG_INPUT)
+static int send_keyboard_report_on_mode(enum kb_mode mode);
+
 static int send_keyboard_report(void)
 {
-    const enum kb_mode mode = mode_manager_get_mode();
+    return send_keyboard_report_on_mode(mode_manager_get_mode());
+}
+
+static int send_keyboard_report_on_mode(enum kb_mode mode)
+{
 
     if (!transport_ready(mode)) {
         LOG_DBG("transport for mode %d is not ready", mode);
@@ -34,6 +41,18 @@ static int send_keyboard_report(void)
     }
 
     return transport_send_keyboard_report(mode, &keyboard_report);
+}
+
+static void release_keyboard_report_on_mode(enum kb_mode mode)
+{
+    int err;
+
+    hid_keyboard_report_clear(&keyboard_report);
+
+    err = send_keyboard_report_on_mode(mode);
+    if (err != 0 && err != -ENOTCONN) {
+        LOG_WRN("keyboard release report failed: %d", err);
+    }
 }
 
 static void send_tap(uint8_t usage_id)
@@ -62,7 +81,11 @@ static void switch_keyboard_mode(void)
 {
     const enum kb_mode current = mode_manager_get_mode();
     const enum kb_mode next = mode_manager_next_supported_mode(current);
-    const int err = mode_manager_set_mode(next);
+    int err;
+
+    release_keyboard_report_on_mode(current);
+
+    err = mode_manager_set_mode(next);
 
     if (err != 0) {
         LOG_WRN("mode switch from %d to %d failed: %d", current, next, err);
@@ -70,50 +93,6 @@ static void switch_keyboard_mode(void)
     }
 
     LOG_INF("mode switched from %d to %d", current, next);
-}
-
-static uint8_t input_code_to_hid_usage(uint16_t code)
-{
-    switch (code) {
-    case INPUT_KEY_ESC:
-        return HID_USAGE_KEY_ESC;
-    case INPUT_KEY_NUMLOCK:
-        return HID_USAGE_KEY_NUM_LOCK;
-    case INPUT_KEY_KPSLASH:
-        return HID_USAGE_KEY_KP_SLASH;
-    case INPUT_KEY_KPASTERISK:
-        return HID_USAGE_KEY_KP_ASTERISK;
-    case INPUT_KEY_KPMINUS:
-        return HID_USAGE_KEY_KP_MINUS;
-    case INPUT_KEY_KPPLUS:
-        return HID_USAGE_KEY_KP_PLUS;
-    case INPUT_KEY_KPENTER:
-        return HID_USAGE_KEY_KP_ENTER;
-    case INPUT_KEY_KP1:
-        return HID_USAGE_KEY_KP_1;
-    case INPUT_KEY_KP2:
-        return HID_USAGE_KEY_KP_2;
-    case INPUT_KEY_KP3:
-        return HID_USAGE_KEY_KP_3;
-    case INPUT_KEY_KP4:
-        return HID_USAGE_KEY_KP_4;
-    case INPUT_KEY_KP5:
-        return HID_USAGE_KEY_KP_5;
-    case INPUT_KEY_KP6:
-        return HID_USAGE_KEY_KP_6;
-    case INPUT_KEY_KP7:
-        return HID_USAGE_KEY_KP_7;
-    case INPUT_KEY_KP8:
-        return HID_USAGE_KEY_KP_8;
-    case INPUT_KEY_KP9:
-        return HID_USAGE_KEY_KP_9;
-    case INPUT_KEY_KP0:
-        return HID_USAGE_KEY_KP_0;
-    case INPUT_KEY_KPDOT:
-        return HID_USAGE_KEY_KP_DOT;
-    default:
-        return HID_USAGE_KEY_NONE;
-    }
 }
 
 static void input_manager_event_cb(struct input_event *evt, void *user_data)
@@ -143,7 +122,7 @@ static void input_manager_event_cb(struct input_event *evt, void *user_data)
         return;
     }
 
-    const uint8_t usage_id = input_code_to_hid_usage(evt->code);
+    const uint8_t usage_id = keymap_lookup_input_code_usage(evt->code);
 
     if (usage_id == HID_USAGE_KEY_NONE) {
         LOG_DBG("ignored input key code %u", evt->code);

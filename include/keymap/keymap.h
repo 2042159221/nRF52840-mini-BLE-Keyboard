@@ -7,12 +7,7 @@
 extern "C" {
 #endif
 
-struct key_position {
-    uint8_t row;
-    uint8_t column;
-};
-
-uint8_t keymap_lookup_usage(struct key_position position);
+uint8_t keymap_lookup_input_code_usage(uint16_t input_code);
 
 #ifdef __cplusplus
 }

@@ -13,7 +13,7 @@
 LOG_MODULE_REGISTER(transport_usb, LOG_LEVEL_INF);
 
 #define PRO_USB_VID 0x1915
-#define PRO_USB_PID 0x5201
+#define PRO_USB_PID 0x52F0
 #define PRO_USB_MAX_POWER 50
 
 static const uint8_t hid_report_desc[] = HID_KEYBOARD_REPORT_DESC();

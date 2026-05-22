@@ -36,6 +36,8 @@ static bool ble_transport_initialized;
 static bool ble_transport_advertising;
 static struct bt_conn *ble_conn;
 static bool ble_in_boot_mode;
+static bool ble_input_report_notify_enabled;
+static bool ble_boot_report_notify_enabled;
 
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE,
@@ -73,6 +75,8 @@ static void advertising_start(void)
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
+    int security_err;
+
     if (err != 0) {
         LOG_WRN("BLE connection failed: 0x%02x", err);
         return;
@@ -81,7 +85,15 @@ static void connected(struct bt_conn *conn, uint8_t err)
     ble_transport_advertising = false;
     ble_conn = bt_conn_ref(conn);
     ble_in_boot_mode = false;
+    ble_input_report_notify_enabled = false;
+    ble_boot_report_notify_enabled = false;
     (void)bt_hids_connected(&hids_obj, conn);
+
+    security_err = bt_conn_set_security(conn, BT_SECURITY_L2);
+    if (security_err != 0) {
+        LOG_WRN("BLE security request failed: %d", security_err);
+    }
+
     LOG_INF("BLE connected");
 }
 
@@ -94,6 +106,9 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
         ble_conn = NULL;
     }
 
+    ble_input_report_notify_enabled = false;
+    ble_boot_report_notify_enabled = false;
+
     LOG_INF("BLE disconnected: 0x%02x", reason);
 
     if (ble_transport_enabled) {
@@ -101,9 +116,25 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
     }
 }
 
+static void security_changed(struct bt_conn *conn, bt_security_t level,
+                 enum bt_security_err err)
+{
+    if (conn != ble_conn) {
+        return;
+    }
+
+    if (err != BT_SECURITY_ERR_SUCCESS) {
+        LOG_WRN("BLE security failed: %d", err);
+        return;
+    }
+
+    LOG_INF("BLE security level: %u", level);
+}
+
 BT_CONN_CB_DEFINE(conn_callbacks) = {
     .connected = connected,
     .disconnected = disconnected,
+    .security_changed = security_changed,
 };
 
 static void hids_pm_evt_handler(enum bt_hids_pm_evt evt, struct bt_conn *conn)
@@ -128,6 +159,34 @@ static void hids_outp_rep_handler(struct bt_hids_rep *rep,
     ARG_UNUSED(rep);
     ARG_UNUSED(conn);
     ARG_UNUSED(write);
+}
+
+static void hids_input_notif_handler(enum bt_hids_notify_evt evt)
+{
+    ble_input_report_notify_enabled = (evt == BT_HIDS_CCCD_EVT_NOTIFY_ENABLED);
+    LOG_INF("BLE HID input notifications %s",
+        ble_input_report_notify_enabled ? "enabled" : "disabled");
+}
+
+static void hids_boot_notif_handler(enum bt_hids_notify_evt evt)
+{
+    ble_boot_report_notify_enabled = (evt == BT_HIDS_CCCD_EVT_NOTIFY_ENABLED);
+    LOG_INF("BLE HID boot notifications %s",
+        ble_boot_report_notify_enabled ? "enabled" : "disabled");
+}
+
+static bool ble_conn_ready_for_hid_report(void)
+{
+    if (!ble_transport_enabled || ble_conn == NULL) {
+        return false;
+    }
+
+    if (bt_conn_get_security(ble_conn) < BT_SECURITY_L2) {
+        return false;
+    }
+
+    return ble_in_boot_mode ? ble_boot_report_notify_enabled :
+                  ble_input_report_notify_enabled;
 }
 
 static void hids_init(void)
@@ -160,6 +219,7 @@ static void hids_init(void)
     hids_inp_rep = &hids_init_obj.inp_rep_group_init.reports[INPUT_REP_KEYS_IDX];
     hids_inp_rep->size = INPUT_REPORT_KEYS_MAX_LEN;
     hids_inp_rep->id = INPUT_REP_KEYS_REF_ID;
+    hids_inp_rep->handler = hids_input_notif_handler;
     hids_init_obj.inp_rep_group_init.cnt++;
 
     hids_outp_rep = &hids_init_obj.outp_rep_group_init.reports[OUTPUT_REP_KEYS_IDX];
@@ -170,6 +230,7 @@ static void hids_init(void)
 
     hids_init_obj.is_kb = true;
     hids_init_obj.pm_evt_handler = hids_pm_evt_handler;
+    hids_init_obj.boot_kb_notif_handler = hids_boot_notif_handler;
 
     (void)bt_hids_init(&hids_obj, &hids_init_obj);
 }
@@ -230,7 +291,7 @@ int transport_ble_disable(void)
 
 bool transport_ble_ready(void)
 {
-    return ble_transport_enabled && ble_conn != NULL;
+    return ble_conn_ready_for_hid_report();
 }
 
 int transport_ble_send_keyboard_report(const struct hid_keyboard_report *report)
