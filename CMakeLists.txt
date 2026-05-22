@@ -14,5 +14,6 @@ target_sources(app PRIVATE
 	src/transport/transport.c
 	src/transport/transport_24g_stub.c
 	src/transport/transport_ble.c
+	src/transport/transport_ble_security.c
 	src/transport/transport_usb.c
 )

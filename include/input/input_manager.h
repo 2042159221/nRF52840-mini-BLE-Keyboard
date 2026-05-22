@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 int input_manager_init(void);
+void input_manager_release_all(void);
 
 #ifdef __cplusplus
 }

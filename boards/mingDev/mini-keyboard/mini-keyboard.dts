@@ -75,6 +75,10 @@
 	};
 };
 
+&adc {
+	status = "okay";
+};
+
 &gpio0 {
 	status = "okay";
 };

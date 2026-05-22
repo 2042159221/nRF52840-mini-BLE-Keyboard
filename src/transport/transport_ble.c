@@ -15,6 +15,7 @@
 #include <zephyr/sys/util.h>
 
 #include <hid/hid_report.h>
+#include <transport/transport_ble_security.h>
 
 LOG_MODULE_REGISTER(transport_ble, LOG_LEVEL_INF);
 
@@ -38,6 +39,7 @@ static struct bt_conn *ble_conn;
 static bool ble_in_boot_mode;
 static bool ble_input_report_notify_enabled;
 static bool ble_boot_report_notify_enabled;
+static struct k_work_delayable ble_advertising_restart_work;
 
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE,
@@ -73,10 +75,17 @@ static void advertising_start(void)
     LOG_INF("BLE advertising started");
 }
 
+static void ble_advertising_restart_work_handler(struct k_work *work)
+{
+    ARG_UNUSED(work);
+
+    if (ble_transport_enabled && ble_conn == NULL && !ble_transport_advertising) {
+        advertising_start();
+    }
+}
+
 static void connected(struct bt_conn *conn, uint8_t err)
 {
-    int security_err;
-
     if (err != 0) {
         LOG_WRN("BLE connection failed: 0x%02x", err);
         return;
@@ -89,9 +98,8 @@ static void connected(struct bt_conn *conn, uint8_t err)
     ble_boot_report_notify_enabled = false;
     (void)bt_hids_connected(&hids_obj, conn);
 
-    security_err = bt_conn_set_security(conn, BT_SECURITY_L2);
-    if (security_err != 0) {
-        LOG_WRN("BLE security request failed: %d", security_err);
+    if (bt_conn_set_security(ble_conn, BT_SECURITY_L2) != 0) {
+        LOG_WRN("BLE security request failed");
     }
 
     LOG_INF("BLE connected");
@@ -112,29 +120,71 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
     LOG_INF("BLE disconnected: 0x%02x", reason);
 
     if (ble_transport_enabled) {
-        advertising_start();
+        (void)k_work_reschedule(&ble_advertising_restart_work, K_MSEC(250));
     }
 }
 
 static void security_changed(struct bt_conn *conn, bt_security_t level,
                  enum bt_security_err err)
 {
+    int unpair_err;
+
     if (conn != ble_conn) {
         return;
     }
 
     if (err != BT_SECURITY_ERR_SUCCESS) {
-        LOG_WRN("BLE security failed: %d", err);
+        LOG_WRN("BLE security failed: %s (%d)",
+            bt_security_err_to_str(err), err);
+
+        if (transport_ble_security_error_requires_bond_reset(err)) {
+            unpair_err = bt_unpair(BT_ID_DEFAULT, bt_conn_get_dst(conn));
+            if (unpair_err != 0) {
+                LOG_WRN("BLE stale bond cleanup failed: %d", unpair_err);
+            } else {
+                LOG_WRN("BLE stale bond removed; forget this keyboard on the host if it reconnects again");
+            }
+        }
+
         return;
     }
 
     LOG_INF("BLE security level: %u", level);
 }
 
+static void pairing_complete(struct bt_conn *conn, bool bonded)
+{
+    ARG_UNUSED(conn);
+
+    LOG_INF("BLE pairing completed, bonded: %d", bonded);
+}
+
+static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
+{
+    int unpair_err;
+
+    LOG_WRN("BLE pairing failed: %s (%d)",
+        bt_security_err_to_str(reason), reason);
+
+    if (!transport_ble_security_error_requires_bond_reset(reason)) {
+        return;
+    }
+
+    unpair_err = bt_unpair(BT_ID_DEFAULT, bt_conn_get_dst(conn));
+    if (unpair_err != 0) {
+        LOG_WRN("BLE bond cleanup after pairing failure failed: %d", unpair_err);
+    }
+}
+
 BT_CONN_CB_DEFINE(conn_callbacks) = {
     .connected = connected,
     .disconnected = disconnected,
     .security_changed = security_changed,
+};
+
+static struct bt_conn_auth_info_cb conn_auth_info_callbacks = {
+    .pairing_complete = pairing_complete,
+    .pairing_failed = pairing_failed,
 };
 
 static void hids_pm_evt_handler(enum bt_hids_pm_evt evt, struct bt_conn *conn)
@@ -189,11 +239,14 @@ static bool ble_conn_ready_for_hid_report(void)
                   ble_input_report_notify_enabled;
 }
 
+static struct bt_hids_init_param hids_init_obj;
+
 static void hids_init(void)
 {
-    struct bt_hids_init_param hids_init_obj = { 0 };
     struct bt_hids_inp_rep *hids_inp_rep;
     struct bt_hids_outp_feat_rep *hids_outp_rep;
+
+    memset(&hids_init_obj, 0, sizeof(hids_init_obj));
 
     static const uint8_t report_map[] = {
         0x05, 0x01, 0x09, 0x06, 0xA1, 0x01,
@@ -240,10 +293,17 @@ int transport_ble_init(void)
     int err;
 
     hids_init();
+    k_work_init_delayable(&ble_advertising_restart_work, ble_advertising_restart_work_handler);
 
     err = bt_enable(NULL);
     if (err != 0) {
         LOG_ERR("Bluetooth init failed: %d", err);
+        return err;
+    }
+
+    err = bt_conn_auth_info_cb_register(&conn_auth_info_callbacks);
+    if (err != 0) {
+        LOG_ERR("Bluetooth auth info callback registration failed: %d", err);
         return err;
     }
 
@@ -275,10 +335,13 @@ int transport_ble_enable(void)
 
 int transport_ble_disable(void)
 {
+    int err;
+
     ble_transport_enabled = false;
+    (void)k_work_cancel_delayable(&ble_advertising_restart_work);
 
     if (ble_transport_advertising) {
-        int err = bt_le_adv_stop();
+        err = bt_le_adv_stop();
 
         if (err != 0 && err != -EALREADY) {
             LOG_WRN("BLE advertising stop failed: %d", err);

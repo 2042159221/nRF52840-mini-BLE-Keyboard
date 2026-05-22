@@ -32,6 +32,19 @@ Do not switch from USB to BLE, or BLE to USB, while leaving the old report activ
 
 **Instead**: clear and send a release report before changing the mode.
 
+### Clearing only the transport report during mode switch
+
+Do not send a temporary empty HID report from the mode layer while leaving
+`input_manager.c`'s active `keyboard_report` unchanged.
+
+**Why it is bad**: the old host may receive a release, but the next key event on
+the new transport can re-send stale keys that were still stored in the input
+layer.
+
+**Instead**: mode transitions must call `input_manager_release_all()` before
+disabling the previous transport so the active transport receives a release and
+the input layer state is cleared from the same source of truth.
+
 ## Required Patterns
 
 ### Single source of truth for key usage mapping
@@ -56,6 +69,22 @@ hid_keyboard_report_remove_key(&keyboard_report, usage);
 
 A mode switch should send a release on the active transport before enabling the next one.
 
+```c
+if (previous_mode != KB_MODE_24G_RESERVED) {
+    input_manager_release_all();
+    transport_disable(previous_mode);
+}
+```
+
+### BLE stale bond recovery
+
+Treat `BT_SECURITY_ERR_PIN_OR_KEY_MISSING` as a stale bond condition. The
+transport should remove the local bond with `bt_unpair(BT_ID_DEFAULT,
+bt_conn_get_dst(conn))` and log that the host may still need to forget the
+keyboard if it keeps reconnecting with an old key.
+
+Other security failures should be logged but must not blindly erase bonds.
+
 ## Testing Requirements
 
 - Add a host-side regression test for pure C mapping logic when a new mapping function is introduced.
@@ -68,3 +97,5 @@ A mode switch should send a release on the active transport before enabling the 
 - Does every keyboard send path check its own readiness gate?
 - Does every mode switch release the current report before the switch?
 - Did the change introduce a new mapping function that deserves a regression test?
+- If BLE security handling changed, is `BT_SECURITY_ERR_PIN_OR_KEY_MISSING`
+  covered by a regression test or a small policy helper?

@@ -20,7 +20,6 @@
 LOG_MODULE_REGISTER(input_manager, LOG_LEVEL_INF);
 
 #define KBD_MATRIX_NODE DT_NODELABEL(kbd_matrix)
-#define MODE_SWITCH_HOLD_MS 2000
 
 static struct hid_keyboard_report keyboard_report;
 
@@ -34,7 +33,6 @@ static int send_keyboard_report(void)
 
 static int send_keyboard_report_on_mode(enum kb_mode mode)
 {
-
     if (!transport_ready(mode)) {
         LOG_DBG("transport for mode %d is not ready", mode);
         return -ENOTCONN;
@@ -43,82 +41,23 @@ static int send_keyboard_report_on_mode(enum kb_mode mode)
     return transport_send_keyboard_report(mode, &keyboard_report);
 }
 
-static void release_keyboard_report_on_mode(enum kb_mode mode)
+void input_manager_release_all(void)
 {
     int err;
 
     hid_keyboard_report_clear(&keyboard_report);
 
-    err = send_keyboard_report_on_mode(mode);
+    err = send_keyboard_report();
     if (err != 0 && err != -ENOTCONN) {
         LOG_WRN("keyboard release report failed: %d", err);
     }
 }
 
-static void send_tap(uint8_t usage_id)
-{
-    int err = hid_keyboard_report_add_key(&keyboard_report, usage_id);
-
-    if (err == 0) {
-        err = send_keyboard_report();
-    }
-
-    if (err != 0 && err != -ENOTCONN) {
-        LOG_WRN("keyboard tap press failed: %d", err);
-    }
-
-    err = hid_keyboard_report_remove_key(&keyboard_report, usage_id);
-    if (err == 0) {
-        err = send_keyboard_report();
-    }
-
-    if (err != 0 && err != -ENOTCONN) {
-        LOG_WRN("keyboard tap release failed: %d", err);
-    }
-}
-
-static void switch_keyboard_mode(void)
-{
-    const enum kb_mode current = mode_manager_get_mode();
-    const enum kb_mode next = mode_manager_next_supported_mode(current);
-    int err;
-
-    release_keyboard_report_on_mode(current);
-
-    err = mode_manager_set_mode(next);
-
-    if (err != 0) {
-        LOG_WRN("mode switch from %d to %d failed: %d", current, next, err);
-        return;
-    }
-
-    LOG_INF("mode switched from %d to %d", current, next);
-}
-
 static void input_manager_event_cb(struct input_event *evt, void *user_data)
 {
-    static int64_t mode_key_pressed_at;
-
     ARG_UNUSED(user_data);
 
     if (evt->type != INPUT_EV_KEY) {
-        return;
-    }
-
-    if (evt->code == INPUT_KEY_NUMLOCK) {
-        if (evt->value != 0) {
-            mode_key_pressed_at = k_uptime_get();
-        } else if (mode_key_pressed_at > 0) {
-            const int64_t held_ms = k_uptime_get() - mode_key_pressed_at;
-
-            mode_key_pressed_at = 0;
-            if (held_ms >= MODE_SWITCH_HOLD_MS) {
-                switch_keyboard_mode();
-            } else {
-                send_tap(HID_USAGE_KEY_NUM_LOCK);
-            }
-        }
-
         return;
     }
 
@@ -143,7 +82,10 @@ static void input_manager_event_cb(struct input_event *evt, void *user_data)
     }
 
     err = send_keyboard_report();
-    if (err != 0 && err != -ENOTCONN) {
+    if (err == -ENOTCONN) {
+        LOG_WRN("keyboard report deferred: mode %d transport is not ready",
+            mode_manager_get_mode());
+    } else if (err != 0) {
         LOG_WRN("keyboard report send failed: %d", err);
     }
 }

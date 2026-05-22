@@ -184,19 +184,28 @@ int transport_usb_init(void)
 
 int transport_usb_enable(void)
 {
-    if (!usb_transport_initialized || usb_context == NULL) {
+    int err;
+
+    if (usb_context == NULL) {
         return -ENODEV;
+    }
+
+    if (!usb_transport_initialized) {
+        err = usb_setup_device();
+        if (err != 0) {
+            return err;
+        }
+
+        usb_transport_initialized = true;
     }
 
     usb_transport_enabled = true;
 
-    if (!usbd_can_detect_vbus(usb_context)) {
-        int err = usbd_enable(usb_context);
-
-        if (err != 0 && err != -EALREADY) {
-            usb_transport_enabled = false;
-            return err;
-        }
+    err = usbd_enable(usb_context);
+    if (err != 0 && err != -EALREADY) {
+        usb_transport_enabled = false;
+        LOG_WRN("USB enable failed: %d", err);
+        return err;
     }
 
     LOG_INF("USB HID transport enabled");
@@ -205,13 +214,32 @@ int transport_usb_enable(void)
 
 int transport_usb_disable(void)
 {
+    int err;
+
     usb_transport_enabled = false;
+    usb_transport_ready = false;
+
+    if (usb_context == NULL || !usb_transport_initialized) {
+        return 0;
+    }
+
+    err = usbd_disable(usb_context);
+    if (err != 0 && err != -EALREADY) {
+        LOG_WRN("USB disable failed: %d", err);
+    }
+
     return 0;
 }
 
 bool transport_usb_ready(void)
 {
-    return usb_transport_enabled && usb_transport_ready;
+    const bool ready = usb_transport_enabled && usb_transport_ready;
+
+    if (usb_transport_enabled && !usb_transport_ready) {
+        LOG_DBG("USB HID transport is enabled but the host interface is not ready");
+    }
+
+    return ready;
 }
 
 int transport_usb_send_keyboard_report(const struct hid_keyboard_report *report)
