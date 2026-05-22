@@ -1,6 +1,11 @@
 build*/
 .firecrawl/
 .vscode/.history/
+.agents/
+.claude/
+.codex/
+.trellis/
+.trellis-before-fix/
 *.log
 *.tmp
 *.bak
