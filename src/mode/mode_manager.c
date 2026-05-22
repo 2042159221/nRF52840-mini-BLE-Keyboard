@@ -11,6 +11,7 @@
 
 #include <input/input_manager.h>
 #include <mode/mode_manager.h>
+#include <mode/mode_selector.h>
 #include <transport/transport.h>
 
 LOG_MODULE_REGISTER(mode_manager, LOG_LEVEL_INF);
@@ -21,8 +22,6 @@ LOG_MODULE_REGISTER(mode_manager, LOG_LEVEL_INF);
 #define MODE_ADC_POLL_INTERVAL_MS 150
 #define MODE_ADC_SAMPLE_COUNT 4
 #define MODE_ADC_STABLE_READS 3
-#define MODE_USB_MAX_MV 825
-#define MODE_BLE_MIN_MV 2475
 #define MODE_MANAGER_MAX_LISTENERS 4
 
 static const struct device *const mode_adc_dev = DEVICE_DT_GET(MODE_ADC_DEVICE);
@@ -70,19 +69,6 @@ static const char *mode_to_string(enum kb_mode mode)
     default:
         return "UNKNOWN";
     }
-}
-
-static enum kb_mode mode_from_voltage_mv(int32_t mv)
-{
-    if (mv < MODE_USB_MAX_MV) {
-        return KB_MODE_USB;
-    }
-
-    if (mv >= MODE_BLE_MIN_MV) {
-        return KB_MODE_BLE;
-    }
-
-    return KB_MODE_24G_RESERVED;
 }
 
 static int mode_adc_init(void)
@@ -209,7 +195,7 @@ static int mode_manager_sync_from_hardware(void)
         return err;
     }
 
-    mode = mode_from_voltage_mv(mv);
+    mode = mode_selector_classify_mv(mv, current_mode);
     LOG_INF("mode selector boot read %ld mV -> %s", (long)mv, mode_to_string(mode));
     return mode_manager_apply_mode(mode, true);
 }
@@ -225,7 +211,7 @@ static int mode_manager_update_from_hardware(void)
         return err;
     }
 
-    mode = mode_from_voltage_mv(mv);
+    mode = mode_selector_classify_mv(mv, current_mode);
 
     if (mode != pending_mode) {
         pending_mode = mode;

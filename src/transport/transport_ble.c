@@ -8,6 +8,7 @@
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/hci.h>
+#include <zephyr/bluetooth/hci_types.h>
 #include <zephyr/bluetooth/services/bas.h>
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/logging/log.h>
@@ -308,7 +309,12 @@ int transport_ble_init(void)
     }
 
     if (IS_ENABLED(CONFIG_SETTINGS)) {
-        settings_load();
+        err = settings_load();
+        if (err != 0) {
+            LOG_WRN("Bluetooth settings load failed: %d", err);
+        } else {
+            LOG_INF("Bluetooth settings loaded");
+        }
     }
 
     bt_bas_set_battery_level(100);
@@ -348,6 +354,18 @@ int transport_ble_disable(void)
         }
         ble_transport_advertising = false;
     }
+
+    if (ble_conn != NULL) {
+        err = bt_conn_disconnect(ble_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+        if (err != 0) {
+            LOG_WRN("BLE disconnect on transport disable failed: %d", err);
+        } else {
+            LOG_INF("BLE disconnect requested for transport disable");
+        }
+    }
+
+    ble_input_report_notify_enabled = false;
+    ble_boot_report_notify_enabled = false;
 
     return 0;
 }

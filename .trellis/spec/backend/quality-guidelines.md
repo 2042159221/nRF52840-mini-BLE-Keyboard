@@ -85,6 +85,42 @@ keyboard if it keeps reconnecting with an old key.
 
 Other security failures should be logged but must not blindly erase bonds.
 
+### Mode selector calibration must follow measured board voltages
+
+Do not treat datasheet threshold values as final truth for the mode selector.
+The ADC-based selector must be implemented as a pure helper that can be tested
+on the host, and its decision points must be calibrated against the measured
+voltages of the actual board.
+
+**Why it matters**: the BLE switch position on this board has been observed at
+roughly `1885 mV`, while the reserved 2.4G position sits around `1021/1027 mV`.
+Using the theoretical `2475 mV` BLE threshold misclassifies the BLE position as
+reserved and leaves the keyboard stuck in a non-HID mode.
+
+**Instead**: keep the selector logic in one helper and cover it with a
+regression test for the real voltages:
+
+```c
+enum kb_mode mode_selector_classify_mv(int32_t mv, enum kb_mode current_mode);
+
+assert(mode_selector_classify_mv(1885, KB_MODE_24G_RESERVED) == KB_MODE_BLE);
+assert(mode_selector_classify_mv(1021, KB_MODE_24G_RESERVED) == KB_MODE_24G_RESERVED);
+```
+
+Use hysteresis around the measured boundaries so the selector does not chatter
+when the ADC value hovers near a transition point.
+
+### Mode switches must actively shut down the old transport
+
+When leaving BLE mode, the BLE transport must not remain connected in the
+background. `transport_ble_disable()` should cancel advertising restart work,
+stop advertising if needed, and disconnect any live connection with a remote
+user termination reason before another transport takes over.
+
+**Why it matters**: the product policy is one active HID channel per mode.
+Leaving BLE connected while USB is active creates ambiguous state and can keep
+the host linked to the wrong channel.
+
 ## Testing Requirements
 
 - Add a host-side regression test for pure C mapping logic when a new mapping function is introduced.

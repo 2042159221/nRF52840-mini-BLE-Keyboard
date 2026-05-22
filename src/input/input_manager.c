@@ -20,6 +20,7 @@
 LOG_MODULE_REGISTER(input_manager, LOG_LEVEL_INF);
 
 #define KBD_MATRIX_NODE DT_NODELABEL(kbd_matrix)
+#define TRANSPORT_NOT_READY_LOG_INTERVAL_MS 3000
 
 static struct hid_keyboard_report keyboard_report;
 
@@ -83,7 +84,8 @@ static void input_manager_event_cb(struct input_event *evt, void *user_data)
 
     err = send_keyboard_report();
     if (err == -ENOTCONN) {
-        LOG_WRN("keyboard report deferred: mode %d transport is not ready",
+        LOG_WRN_RATELIMIT_RATE(TRANSPORT_NOT_READY_LOG_INTERVAL_MS,
+            "keyboard report deferred: mode %d transport is not ready",
             mode_manager_get_mode());
     } else if (err != 0) {
         LOG_WRN("keyboard report send failed: %d", err);

@@ -11,6 +11,7 @@ target_sources(app PRIVATE
 	src/input/input_manager.c
 	src/keymap/keymap.c
 	src/mode/mode_manager.c
+	src/mode/mode_selector.c
 	src/transport/transport.c
 	src/transport/transport_24g_stub.c
 	src/transport/transport_ble.c

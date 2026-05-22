@@ -24,6 +24,9 @@ Use for recoverable or expected failures that affect behavior:
 - ignored input events that do not map to HID usage
 - non-ready transport attempts
 
+Repeated non-ready transport attempts from held or repeated keys must be
+rate-limited, for example with `LOG_WRN_RATELIMIT_RATE(...)`.
+
 ### `LOG_ERR`
 Use for initialization failures and unrecoverable configuration problems:
 - transport init failures
@@ -38,6 +41,7 @@ Use sparingly for low-level traces such as dropped input events or transport rea
 - transport init and enable/disable events
 - mode transitions
 - BLE connection lifecycle and security results
+- Bluetooth settings load success or failure after `bt_enable()`
 - report send failures and report release failures
 - input events that were ignored because they do not map to the product keyboard
 
@@ -46,6 +50,7 @@ Use sparingly for low-level traces such as dropped input events or transport rea
 - raw HID report dumps in normal operation
 - secrets, pairing keys, or bond data
 - high-frequency scan spam from every matrix poll
+- one warning per key event when the selected transport is disconnected
 - repetitive per-event traces that do not help bring-up
 
 ## Example
@@ -54,4 +59,5 @@ Use sparingly for low-level traces such as dropped input events or transport rea
 LOG_MODULE_REGISTER(input_manager, LOG_LEVEL_INF);
 LOG_INF("mode switched from %d to %d", current, next);
 LOG_WRN("keyboard report send failed: %d", err);
+LOG_WRN_RATELIMIT_RATE(3000, "keyboard report deferred: mode %d transport is not ready", mode);
 ```
