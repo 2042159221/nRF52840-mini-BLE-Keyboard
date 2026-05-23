@@ -17,7 +17,8 @@ if (-not (Test-Path $ToolchainRoot)) {
 $env:ZEPHYR_BASE = Join-Path $NcsRoot "zephyr"
 $env:ZEPHYR_TOOLCHAIN_VARIANT = "zephyr"
 $env:ZEPHYR_SDK_INSTALL_DIR = $ZephyrSdk
-$env:WEST_PYTHON = Join-Path $ToolchainBin "python.exe"
+$NcsPython = Join-Path $ToolchainBin "python.exe"
+$env:WEST_PYTHON = $NcsPython
 $env:NCS_TOOLCHAIN_VERSION = "NONE"
 
 $pathEntries = @(
@@ -33,4 +34,8 @@ $env:PATH = (($pathEntries + ($env:PATH -split ';')) | Where-Object { $_ -and (T
 Write-Host "NCS root: $NcsRoot"
 Write-Host "Toolchain: $ToolchainRoot"
 Write-Host "ZEPHYR_BASE: $env:ZEPHYR_BASE"
-& (Join-Path $PythonScripts "west.exe") --version
+Write-Host "Python: $NcsPython"
+& $NcsPython -m west --version
+if ($LASTEXITCODE -ne 0) {
+    throw "west version check failed with exit code $LASTEXITCODE"
+}

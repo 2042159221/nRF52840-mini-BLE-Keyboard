@@ -46,6 +46,10 @@
 - Unit-test battery voltage conversion and state thresholds, including boundary values.
 - Unit-test low/critical policy actions and repeated-state no-op behavior.
 - Build the Zephyr firmware with the project board after DTS or Kconfig changes.
+- Use the NCS toolchain Python wrapper for Zephyr builds. In this repository, prefer:
+  `.\scripts\build.ps1 -Pristine -BuildDir "D:\b_ip5306_rtt_usb" -Board "mini-keyboard/nrf52840" -Snippet "rtt-console"`.
+  Do not call bare `west`; the script loads `scripts/ncs-env.ps1` and runs
+  `E:\ncs\toolchains\fd21892d0f\opt\bin\python.exe -m west`.
 - Inspect generated DTS when changing hardware resources: confirm GPIO polarity, I2C address, pinctrl selections, and `nfct-pins-as-gpios`.
 
 ### 7. Wrong vs Correct

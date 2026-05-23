@@ -7,23 +7,28 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 . (Join-Path $PSScriptRoot "ncs-env.ps1")
 
-$West = Join-Path "E:\ncs\toolchains\fd21892d0f\opt\bin\Scripts" "west.exe"
-$ResolvedBuildDir = Join-Path $ProjectRoot $BuildDir
+$NcsPython = "E:\ncs\toolchains\fd21892d0f\opt\bin\python.exe"
+if ([System.IO.Path]::IsPathRooted($BuildDir)) {
+    $ResolvedBuildDir = [System.IO.Path]::GetFullPath($BuildDir)
+} else {
+    $ResolvedBuildDir = [System.IO.Path]::GetFullPath((Join-Path $ProjectRoot $BuildDir))
+}
 
 $westArgs = @(
     "build",
     "--build-dir", $ResolvedBuildDir,
     $ProjectRoot,
-    "--board", $Board,
-    "--"
+    "--board", $Board
 )
 
 if ($Pristine) {
-    $westArgs = @("build", "--build-dir", $ResolvedBuildDir, $ProjectRoot, "--pristine", "--board", $Board, "--")
+    $westArgs += "--pristine=always"
 }
+
+$westArgs += "--"
 
 if ($Snippet) {
     $westArgs += "-DSNIPPET=$Snippet"
@@ -31,5 +36,8 @@ if ($Snippet) {
 
 $westArgs += "-DBOARD_ROOT=$ProjectRoot"
 
-Write-Host "Running west $($westArgs -join ' ')"
-& $West @westArgs
+Write-Host "Running $NcsPython -m west $($westArgs -join ' ')"
+& $NcsPython -m west @westArgs
+if ($LASTEXITCODE -ne 0) {
+    throw "west build failed with exit code $LASTEXITCODE"
+}
