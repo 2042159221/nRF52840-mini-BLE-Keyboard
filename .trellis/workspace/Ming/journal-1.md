@@ -39,3 +39,40 @@ Implemented phase-one keyboard firmware: consolidated keymap handling, tightened
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: IP5306 power management
+
+**Date**: 2026-05-23
+**Task**: IP5306 power management
+**Branch**: `feature/ip5306-power-management`
+
+### Summary
+
+Added IP5306 power management, gated battery ADC sampling, keepalive pulses, USB VBUS reporting, low-battery policy hooks, tests, and embedded power guidelines.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `729f516` | (see git log) |
+| `6099347` | (see git log) |
+| `d3ad860` | (see git log) |
+| `7c9c7ae` | (see git log) |
+| `d8e7da4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

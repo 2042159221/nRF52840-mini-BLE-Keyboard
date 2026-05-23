@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 1
-- **Last Active**: 2026-05-22
+- **Total Sessions**: 2
+- **Last Active**: 2026-05-23
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~41 | Active |
+| `journal-1.md` | ~78 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 2 | 2026-05-23 | IP5306 power management | `729f516`, `6099347`, `d3ad860`, `7c9c7ae`, `d8e7da4` | `feature/ip5306-power-management` |
 | 1 | 2026-05-22 | Bluetooth keyboard implementation | `e0df6cb`, `d29e81c` | `master` |
 <!-- @@@/auto:session-history -->
 
