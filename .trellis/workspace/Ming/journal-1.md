@@ -76,3 +76,36 @@ Added IP5306 power management, gated battery ADC sampling, keepalive pulses, USB
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Fix power RTT diagnostics and NCS west workflow
+
+**Date**: 2026-05-23
+**Task**: Fix power RTT diagnostics and NCS west workflow
+**Branch**: `feature/ip5306-power-management`
+
+### Summary
+
+Moved power manager init earlier, made battery state visible in RTT sampling, tightened USB VBUS enable sequencing, increased UDC buffer pool, and documented/verified NCS Python west build workflow.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9d64b30` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
