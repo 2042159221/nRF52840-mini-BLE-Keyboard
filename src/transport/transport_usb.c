@@ -33,8 +33,31 @@ USBD_CONFIGURATION_DEFINE(pro_keyboard_fs_config, 0, PRO_USB_MAX_POWER,
 static bool usb_transport_enabled;
 static bool usb_transport_ready;
 static bool usb_transport_initialized;
+static bool usb_vbus_present;
 static struct usbd_context *usb_context;
 static const struct device *hid_device;
+
+static int usb_enable_device_if_allowed(void)
+{
+    int err;
+
+    if (usb_context == NULL || !usb_transport_enabled) {
+        return 0;
+    }
+
+    if (usbd_can_detect_vbus(usb_context) && !usb_vbus_present) {
+        return 0;
+    }
+
+    err = usbd_enable(usb_context);
+    if (err != 0 && err != -EALREADY) {
+        usb_transport_enabled = false;
+        LOG_WRN("USB enable failed: %d", err);
+        return err;
+    }
+
+    return 0;
+}
 
 static void usb_iface_ready(const struct device *dev, const bool ready)
 {
@@ -104,9 +127,11 @@ static void usb_msg_cb(struct usbd_context *const usbd_ctx, const struct usbd_ms
 
     if (usbd_can_detect_vbus(usbd_ctx)) {
         if (msg->type == USBD_MSG_VBUS_READY) {
+            usb_vbus_present = true;
             power_manager_usb_power_present(true);
-            (void)usbd_enable(usbd_ctx);
+            (void)usb_enable_device_if_allowed();
         } else if (msg->type == USBD_MSG_VBUS_REMOVED) {
+            usb_vbus_present = false;
             power_manager_usb_power_present(false);
             usb_transport_ready = false;
             (void)usbd_disable(usbd_ctx);
@@ -204,10 +229,8 @@ int transport_usb_enable(void)
 
     usb_transport_enabled = true;
 
-    err = usbd_enable(usb_context);
-    if (err != 0 && err != -EALREADY) {
-        usb_transport_enabled = false;
-        LOG_WRN("USB enable failed: %d", err);
+    err = usb_enable_device_if_allowed();
+    if (err != 0) {
         return err;
     }
 

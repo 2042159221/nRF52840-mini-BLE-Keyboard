@@ -56,6 +56,7 @@ static void battery_sample_work_handler(struct k_work *work)
     err = battery_monitor_sample_once(&sample);
     if (err == 0) {
         LOG_INF("power: vbat raw=%ld mv=%ld", (long)sample.raw, (long)sample.vbat_mv);
+        LOG_INF("power: battery state=%s", battery_monitor_state_name(sample.state));
         power_manager_notify_battery_state(sample.state);
     } else {
         LOG_WRN("power: battery sample failed: %d", err);
@@ -119,12 +120,7 @@ void power_manager_usb_power_present(bool present)
 
 void power_manager_notify_battery_state(enum battery_state state)
 {
-    bool state_changed = power_policy_state_would_change(&policy_state, state);
     enum power_policy_action action = power_policy_update(&policy_state, state);
-
-    if (state_changed) {
-        LOG_INF("power: battery state=%s", battery_monitor_state_name(state));
-    }
 
     if (action == POWER_POLICY_ACTION_LOW_BATTERY) {
         LOG_WRN("power: low battery policy hook");

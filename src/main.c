@@ -10,16 +10,16 @@ LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
 
 int main(void)
 {
-        int err = transport_init();
+        int err = power_manager_init();
 
+        if (err != 0) {
+                LOG_ERR("power manager init failed: %d", err);
+        }
+
+        err = transport_init();
         if (err != 0) {
                 LOG_ERR("transport init failed: %d", err);
                 return 0;
-        }
-
-        err = power_manager_init();
-        if (err != 0) {
-                LOG_ERR("power manager init failed: %d", err);
         }
 
         err = input_manager_init();
