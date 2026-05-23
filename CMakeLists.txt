@@ -12,6 +12,10 @@ target_sources(app PRIVATE
 	src/keymap/keymap.c
 	src/mode/mode_manager.c
 	src/mode/mode_selector.c
+	src/power/battery_monitor.c
+	src/power/ip5306.c
+	src/power/power_manager.c
+	src/power/power_policy.c
 	src/transport/transport.c
 	src/transport/transport_24g_stub.c
 	src/transport/transport_ble.c
