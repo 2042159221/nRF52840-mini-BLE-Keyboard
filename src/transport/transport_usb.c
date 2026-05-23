@@ -9,6 +9,7 @@
 #include <zephyr/usb/usbd.h>
 
 #include <hid/hid_report.h>
+#include <power/power_manager.h>
 
 LOG_MODULE_REGISTER(transport_usb, LOG_LEVEL_INF);
 
@@ -103,8 +104,10 @@ static void usb_msg_cb(struct usbd_context *const usbd_ctx, const struct usbd_ms
 
     if (usbd_can_detect_vbus(usbd_ctx)) {
         if (msg->type == USBD_MSG_VBUS_READY) {
+            power_manager_usb_power_present(true);
             (void)usbd_enable(usbd_ctx);
         } else if (msg->type == USBD_MSG_VBUS_REMOVED) {
+            power_manager_usb_power_present(false);
             usb_transport_ready = false;
             (void)usbd_disable(usbd_ctx);
         }
