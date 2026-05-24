@@ -83,6 +83,12 @@ transport should remove the local bond with `bt_unpair(BT_ID_DEFAULT,
 bt_conn_get_dst(conn))` and log that the host may still need to forget the
 keyboard if it keeps reconnecting with an old key.
 
+After a stale bond cleanup, delay the advertising restart longer than the normal
+disconnect retry. The host can still hold the stale bond and immediately
+reconnect with the old key, so a short fixed retry delay creates a connection
+storm while the user is trying to remove the host-side pairing. Keep the delay
+policy in a small helper and cover it with a host regression test.
+
 Other security failures should be logged but must not blindly erase bonds.
 
 ### Mode selector calibration must follow measured board voltages

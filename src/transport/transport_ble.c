@@ -47,6 +47,8 @@ static bool ble_in_boot_mode;
 static bool ble_keyboard_report_notify_enabled;
 static bool ble_consumer_report_notify_enabled;
 static bool ble_boot_report_notify_enabled;
+static int ble_advertising_restart_delay_ms =
+    TRANSPORT_BLE_SECURITY_RECONNECT_DELAY_MS;
 static struct k_work_delayable ble_advertising_restart_work;
 
 static const struct bt_data ad[] = {
@@ -130,7 +132,10 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
     LOG_INF("BLE disconnected: 0x%02x", reason);
 
     if (ble_transport_enabled) {
-        (void)k_work_reschedule(&ble_advertising_restart_work, K_MSEC(250));
+        (void)k_work_reschedule(&ble_advertising_restart_work,
+                    K_MSEC(ble_advertising_restart_delay_ms));
+        ble_advertising_restart_delay_ms =
+            transport_ble_security_reconnect_delay_ms(BT_SECURITY_ERR_SUCCESS);
     }
 }
 
@@ -148,11 +153,15 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
             bt_security_err_to_str(err), err);
 
         if (transport_ble_security_error_requires_bond_reset(err)) {
+            ble_advertising_restart_delay_ms =
+                transport_ble_security_reconnect_delay_ms(err);
             unpair_err = bt_unpair(BT_ID_DEFAULT, bt_conn_get_dst(conn));
             if (unpair_err != 0) {
                 LOG_WRN("BLE stale bond cleanup failed: %d", unpair_err);
             } else {
-                LOG_WRN("BLE stale bond removed; forget this keyboard on the host if it reconnects again");
+                LOG_WRN("BLE stale bond removed; forget this keyboard on the host");
+                LOG_WRN("BLE advertising retry delayed %d ms after stale bond",
+                    ble_advertising_restart_delay_ms);
             }
         }
 
