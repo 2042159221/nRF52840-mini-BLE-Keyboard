@@ -10,7 +10,7 @@
 #include <zephyr/kernel.h>
 #endif
 
-#define POWER_STATE_MAX_SUBSCRIBERS 6u
+#define POWER_STATE_MAX_SUBSCRIBERS 10u
 
 struct power_state_subscriber {
     power_state_listener_t listener;

@@ -12,6 +12,7 @@
 
 #include <hid/hid_consumer.h>
 #include <hid/hid_report.h>
+#include <keyboard/keyboard_led_state.h>
 #include <power/power_manager.h>
 
 LOG_MODULE_REGISTER(transport_usb, LOG_LEVEL_INF);
@@ -138,10 +139,18 @@ static int usb_set_report(const struct device *dev,
               const uint8_t *const buf)
 {
     ARG_UNUSED(dev);
-    ARG_UNUSED(type);
-    ARG_UNUSED(id);
-    ARG_UNUSED(len);
-    ARG_UNUSED(buf);
+
+    if (type != HID_REPORT_TYPE_OUTPUT || buf == NULL || len == 0U) {
+        return 0;
+    }
+
+    if (id == USB_REPORT_ID_KEYBOARD) {
+        keyboard_led_state_update(buf[0]);
+    } else if (id == 0U && len == 1U) {
+        keyboard_led_state_update(buf[0]);
+    } else if (id == 0U && len >= 2U && buf[0] == USB_REPORT_ID_KEYBOARD) {
+        keyboard_led_state_update(buf[1]);
+    }
 
     return 0;
 }

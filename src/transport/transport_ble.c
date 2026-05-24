@@ -17,6 +17,7 @@
 
 #include <hid/hid_consumer.h>
 #include <hid/hid_report.h>
+#include <keyboard/keyboard_led_state.h>
 #include <transport/ble_bas_adapter.h>
 #include <transport/transport_ble_security.h>
 
@@ -225,9 +226,16 @@ static void hids_pm_evt_handler(enum bt_hids_pm_evt evt, struct bt_conn *conn)
 static void hids_outp_rep_handler(struct bt_hids_rep *rep,
                   struct bt_conn *conn, bool write)
 {
-    ARG_UNUSED(rep);
     ARG_UNUSED(conn);
     ARG_UNUSED(write);
+
+    if (rep == NULL || rep->data == NULL || rep->size == 0U) {
+        return;
+    }
+
+    if (rep->id == OUTPUT_REP_KEYS_REF_ID || rep->id == 0U) {
+        keyboard_led_state_update(rep->data[0]);
+    }
 }
 
 static void hids_input_notif_handler(uint8_t report_id, enum bt_hids_notify_evt evt)
@@ -346,6 +354,7 @@ static void hids_init(void)
     hids_init_obj.is_kb = true;
     hids_init_obj.pm_evt_handler = hids_pm_evt_handler;
     hids_init_obj.boot_kb_notif_handler = hids_boot_notif_handler;
+    hids_init_obj.boot_kb_outp_rep_handler = hids_outp_rep_handler;
 
     (void)bt_hids_init(&hids_obj, &hids_init_obj);
 }

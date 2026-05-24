@@ -4,6 +4,7 @@
 #include <zephyr/dt-bindings/i2c/i2c.h>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/dt-bindings/input/keymap.h>
+#include <zephyr/dt-bindings/led/led.h>
 #include "mini-keyboard-pinctrl.dtsi"
 
 / {
@@ -14,6 +15,11 @@
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
 		zephyr,code-partition = &slot0_partition;
+		zephyr,led-strip = &rgb_strip;
+	};
+
+	aliases {
+		led-strip = &rgb_strip;
 	};
 
 	kbd_matrix: kbd-matrix {
@@ -90,6 +96,7 @@
 	zephyr,user {
 		wakeup-gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
 		battery-enable-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;
+		rgb-power-enable-gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
 	};
 };
 
@@ -108,6 +115,27 @@
 	ip5306: ip5306@75 {
 		compatible = "i2c-device";
 		reg = <0x75>;
+	};
+};
+
+&spi3 {
+	compatible = "nordic,nrf-spim";
+	status = "okay";
+	pinctrl-0 = <&spi3_default>;
+	pinctrl-1 = <&spi3_sleep>;
+	pinctrl-names = "default", "sleep";
+
+	rgb_strip: ws2812@0 {
+		compatible = "worldsemi,ws2812-spi";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+		chain-length = <17>;
+		color-mapping = <LED_COLOR_ID_GREEN
+				 LED_COLOR_ID_RED
+				 LED_COLOR_ID_BLUE>;
+		spi-one-frame = <0x70>;
+		spi-zero-frame = <0x40>;
+		bits-per-symbol = <8>;
 	};
 };
 

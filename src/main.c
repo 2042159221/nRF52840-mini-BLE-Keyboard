@@ -5,6 +5,7 @@
 #include <input/input_manager.h>
 #include <mode/mode_manager.h>
 #include <power/power_manager.h>
+#include <rgb/rgb_manager.h>
 #include <transport/transport.h>
 
 LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
@@ -33,6 +34,11 @@ int main(void)
         if (err != 0) {
                 LOG_ERR("encoder init failed: %d", err);
                 return 0;
+        }
+
+        err = rgb_manager_init();
+        if (err != 0) {
+                LOG_WRN("RGB init failed: %d", err);
         }
 
         err = mode_manager_init();
