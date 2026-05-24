@@ -1,7 +1,7 @@
 #include <mode/mode_selector.h>
 
 #define MODE_USB_24G_BOUNDARY_MV 825
-#define MODE_24G_BLE_BOUNDARY_MV 1450
+#define MODE_24G_BLE_BOUNDARY_MV 2475
 #define MODE_SELECTOR_HYSTERESIS_MV 100
 
 enum kb_mode mode_selector_classify_mv(int32_t mv, enum kb_mode current_mode)
