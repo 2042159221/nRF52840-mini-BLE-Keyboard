@@ -145,3 +145,36 @@ Implemented evented power state BLE BAS integration, documented contracts, added
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Implement RGB reactive lighting subsystem
+
+**Date**: 2026-05-24
+**Task**: Implement RGB reactive lighting subsystem
+**Branch**: `main`
+
+### Summary
+
+Added WS2812 RGB hardware layer, reactive red key effects, host Num Lock status LED parsing, and power-state brightness policy.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `21ce438` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
