@@ -9,7 +9,6 @@
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/hci_types.h>
-#include <zephyr/bluetooth/services/bas.h>
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/settings/settings.h>
@@ -18,6 +17,7 @@
 
 #include <hid/hid_consumer.h>
 #include <hid/hid_report.h>
+#include <transport/ble_bas_adapter.h>
 #include <transport/transport_ble_security.h>
 
 LOG_MODULE_REGISTER(transport_ble, LOG_LEVEL_INF);
@@ -369,7 +369,12 @@ int transport_ble_init(void)
         }
     }
 
-    bt_bas_set_battery_level(100);
+    err = ble_bas_adapter_init();
+    if (err != 0) {
+        LOG_ERR("BLE BAS adapter init failed: %d", err);
+        return err;
+    }
+
     ble_transport_initialized = true;
     LOG_INF("BLE HID transport initialized");
     return 0;

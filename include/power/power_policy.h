@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include <power/battery_monitor.h>
+#include <power/power_state.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,6 +19,8 @@ enum power_policy_action {
 struct power_policy_state {
     enum battery_state battery_state;
     bool has_battery_state;
+    enum power_level_state level_state;
+    bool has_level_state;
 };
 
 void power_policy_init(struct power_policy_state *state);
@@ -25,6 +28,9 @@ bool power_policy_state_would_change(const struct power_policy_state *state,
                      enum battery_state battery_state);
 enum power_policy_action power_policy_update(struct power_policy_state *state,
                          enum battery_state battery_state);
+enum power_policy_action
+power_policy_update_snapshot(struct power_policy_state *state,
+                 const struct power_state_snapshot *snapshot);
 
 #ifdef __cplusplus
 }

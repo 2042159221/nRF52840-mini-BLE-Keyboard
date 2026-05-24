@@ -18,8 +18,10 @@ target_sources(app PRIVATE
 	src/power/ip5306.c
 	src/power/power_manager.c
 	src/power/power_policy.c
+	src/power/power_state.c
 	src/transport/transport.c
 	src/transport/transport_24g_stub.c
+	src/transport/ble_bas_adapter.c
 	src/transport/transport_ble.c
 	src/transport/transport_ble_security.c
 	src/transport/transport_usb.c
