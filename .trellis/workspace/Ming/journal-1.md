@@ -109,3 +109,39 @@ Moved power manager init earlier, made battery state visible in RTT sampling, ti
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: BLE BAS power state integration
+
+**Date**: 2026-05-24
+**Task**: BLE BAS power state integration
+**Branch**: `feature/ble-bas-power-state-integration`
+
+### Summary
+
+Implemented evented power state BLE BAS integration, documented contracts, added stale bond reconnect backoff, and calibrated BLE mode selector threshold; host tests and NCS build pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bd17548` | (see git log) |
+| `d55f4d3` | (see git log) |
+| `3510d25` | (see git log) |
+| `c4e3fb1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
