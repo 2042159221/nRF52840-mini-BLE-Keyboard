@@ -20,6 +20,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
 | [Embedded Power Guidelines](./embedded-power-guidelines.md) | Hardware-backed power, battery ADC, IP5306 contracts | Active |
+| [HID Consumer Transport Contracts](./hid-consumer-transport.md) | EC11 Consumer Control HID report, transport, and descriptor contracts | Active |
 
 ---
 
