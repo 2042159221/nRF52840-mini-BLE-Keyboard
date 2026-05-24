@@ -13,8 +13,10 @@
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/settings/settings.h>
+#include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/util.h>
 
+#include <hid/hid_consumer.h>
 #include <hid/hid_report.h>
 #include <transport/transport_ble_security.h>
 
@@ -25,20 +27,25 @@ LOG_MODULE_REGISTER(transport_ble, LOG_LEVEL_INF);
 
 #define BASE_USB_HID_SPEC_VERSION 0x0101
 #define INPUT_REP_KEYS_IDX 0
+#define INPUT_REP_CONSUMER_IDX 1
 #define OUTPUT_REP_KEYS_IDX 0
-#define INPUT_REP_KEYS_REF_ID 0
-#define OUTPUT_REP_KEYS_REF_ID 0
+#define INPUT_REP_KEYS_REF_ID 1
+#define INPUT_REP_CONSUMER_REF_ID 2
+#define OUTPUT_REP_KEYS_REF_ID INPUT_REP_KEYS_REF_ID
 #define INPUT_REPORT_KEYS_MAX_LEN sizeof(struct hid_keyboard_report)
+#define INPUT_REPORT_CONSUMER_MAX_LEN sizeof(struct hid_consumer_report)
 #define OUTPUT_REPORT_MAX_LEN 1
 
-BT_HIDS_DEF(hids_obj, OUTPUT_REPORT_MAX_LEN, INPUT_REPORT_KEYS_MAX_LEN);
+BT_HIDS_DEF(hids_obj, OUTPUT_REPORT_MAX_LEN, INPUT_REPORT_KEYS_MAX_LEN,
+        INPUT_REPORT_CONSUMER_MAX_LEN);
 
 static bool ble_transport_enabled;
 static bool ble_transport_initialized;
 static bool ble_transport_advertising;
 static struct bt_conn *ble_conn;
 static bool ble_in_boot_mode;
-static bool ble_input_report_notify_enabled;
+static bool ble_keyboard_report_notify_enabled;
+static bool ble_consumer_report_notify_enabled;
 static bool ble_boot_report_notify_enabled;
 static struct k_work_delayable ble_advertising_restart_work;
 
@@ -95,7 +102,8 @@ static void connected(struct bt_conn *conn, uint8_t err)
     ble_transport_advertising = false;
     ble_conn = bt_conn_ref(conn);
     ble_in_boot_mode = false;
-    ble_input_report_notify_enabled = false;
+    ble_keyboard_report_notify_enabled = false;
+    ble_consumer_report_notify_enabled = false;
     ble_boot_report_notify_enabled = false;
     (void)bt_hids_connected(&hids_obj, conn);
 
@@ -115,7 +123,8 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
         ble_conn = NULL;
     }
 
-    ble_input_report_notify_enabled = false;
+    ble_keyboard_report_notify_enabled = false;
+    ble_consumer_report_notify_enabled = false;
     ble_boot_report_notify_enabled = false;
 
     LOG_INF("BLE disconnected: 0x%02x", reason);
@@ -212,11 +221,23 @@ static void hids_outp_rep_handler(struct bt_hids_rep *rep,
     ARG_UNUSED(write);
 }
 
-static void hids_input_notif_handler(enum bt_hids_notify_evt evt)
+static void hids_input_notif_handler(uint8_t report_id, enum bt_hids_notify_evt evt)
 {
-    ble_input_report_notify_enabled = (evt == BT_HIDS_CCCD_EVT_NOTIFY_ENABLED);
-    LOG_INF("BLE HID input notifications %s",
-        ble_input_report_notify_enabled ? "enabled" : "disabled");
+    const bool enabled = (evt == BT_HIDS_CCCD_EVT_NOTIFY_ENABLED);
+
+    switch (report_id) {
+    case INPUT_REP_KEYS_REF_ID:
+        ble_keyboard_report_notify_enabled = enabled;
+        LOG_INF("BLE HID keyboard notifications %s", enabled ? "enabled" : "disabled");
+        break;
+    case INPUT_REP_CONSUMER_REF_ID:
+        ble_consumer_report_notify_enabled = enabled;
+        LOG_INF("BLE HID consumer notifications %s", enabled ? "enabled" : "disabled");
+        break;
+    default:
+        LOG_WRN("BLE HID notification event for unknown report id %u", report_id);
+        break;
+    }
 }
 
 static void hids_boot_notif_handler(enum bt_hids_notify_evt evt)
@@ -226,7 +247,7 @@ static void hids_boot_notif_handler(enum bt_hids_notify_evt evt)
         ble_boot_report_notify_enabled ? "enabled" : "disabled");
 }
 
-static bool ble_conn_ready_for_hid_report(void)
+static bool ble_conn_ready_for_report(void)
 {
     if (!ble_transport_enabled || ble_conn == NULL) {
         return false;
@@ -236,8 +257,26 @@ static bool ble_conn_ready_for_hid_report(void)
         return false;
     }
 
+    return true;
+}
+
+static bool ble_conn_ready_for_keyboard_report(void)
+{
+    if (!ble_conn_ready_for_report()) {
+        return false;
+    }
+
     return ble_in_boot_mode ? ble_boot_report_notify_enabled :
-                  ble_input_report_notify_enabled;
+                  ble_keyboard_report_notify_enabled;
+}
+
+static bool ble_conn_ready_for_consumer_report(void)
+{
+    if (!ble_conn_ready_for_report() || ble_in_boot_mode) {
+        return false;
+    }
+
+    return ble_consumer_report_notify_enabled;
 }
 
 static struct bt_hids_init_param hids_init_obj;
@@ -251,6 +290,7 @@ static void hids_init(void)
 
     static const uint8_t report_map[] = {
         0x05, 0x01, 0x09, 0x06, 0xA1, 0x01,
+        0x85, INPUT_REP_KEYS_REF_ID,
         0x05, 0x07, 0x19, 0xe0, 0x29, 0xe7,
         0x15, 0x00, 0x25, 0x01, 0x75, 0x01,
         0x95, 0x08, 0x81, 0x02,
@@ -261,7 +301,13 @@ static void hids_init(void)
         0x95, 0x05, 0x75, 0x01, 0x05, 0x08,
         0x19, 0x01, 0x29, 0x05, 0x91, 0x02,
         0x95, 0x01, 0x75, 0x03, 0x91, 0x01,
-        0xC0
+        0xC0,
+        0x05, 0x0c, 0x09, 0x01, 0xa1, 0x01,
+        0x85, INPUT_REP_CONSUMER_REF_ID,
+        0x15, 0x00, 0x26, 0xff, 0x03,
+        0x19, 0x00, 0x2a, 0xff, 0x03,
+        0x75, 0x10, 0x95, 0x01, 0x81, 0x00,
+        0xc0
     };
 
     hids_init_obj.rep_map.data = report_map;
@@ -273,7 +319,13 @@ static void hids_init(void)
     hids_inp_rep = &hids_init_obj.inp_rep_group_init.reports[INPUT_REP_KEYS_IDX];
     hids_inp_rep->size = INPUT_REPORT_KEYS_MAX_LEN;
     hids_inp_rep->id = INPUT_REP_KEYS_REF_ID;
-    hids_inp_rep->handler = hids_input_notif_handler;
+    hids_inp_rep->handler_ext = hids_input_notif_handler;
+    hids_init_obj.inp_rep_group_init.cnt++;
+
+    hids_inp_rep = &hids_init_obj.inp_rep_group_init.reports[INPUT_REP_CONSUMER_IDX];
+    hids_inp_rep->size = INPUT_REPORT_CONSUMER_MAX_LEN;
+    hids_inp_rep->id = INPUT_REP_CONSUMER_REF_ID;
+    hids_inp_rep->handler_ext = hids_input_notif_handler;
     hids_init_obj.inp_rep_group_init.cnt++;
 
     hids_outp_rep = &hids_init_obj.outp_rep_group_init.reports[OUTPUT_REP_KEYS_IDX];
@@ -364,7 +416,8 @@ int transport_ble_disable(void)
         }
     }
 
-    ble_input_report_notify_enabled = false;
+    ble_keyboard_report_notify_enabled = false;
+    ble_consumer_report_notify_enabled = false;
     ble_boot_report_notify_enabled = false;
 
     return 0;
@@ -372,7 +425,7 @@ int transport_ble_disable(void)
 
 bool transport_ble_ready(void)
 {
-    return ble_conn_ready_for_hid_report();
+    return ble_conn_ready_for_keyboard_report();
 }
 
 int transport_ble_send_keyboard_report(const struct hid_keyboard_report *report)
@@ -392,4 +445,26 @@ int transport_ble_send_keyboard_report(const struct hid_keyboard_report *report)
 
     return bt_hids_inp_rep_send(&hids_obj, ble_conn, INPUT_REP_KEYS_IDX,
                     (const uint8_t *)report, sizeof(*report), NULL);
+}
+
+int transport_ble_send_consumer_report(const struct hid_consumer_report *report)
+{
+    uint8_t consumer_report[INPUT_REPORT_CONSUMER_MAX_LEN];
+
+    if (report == NULL) {
+        return -EINVAL;
+    }
+
+    if (ble_in_boot_mode) {
+        return -ENOTSUP;
+    }
+
+    if (!ble_conn_ready_for_consumer_report()) {
+        return -ENOTCONN;
+    }
+
+    sys_put_le16(report->usage, consumer_report);
+
+    return bt_hids_inp_rep_send(&hids_obj, ble_conn, INPUT_REP_CONSUMER_IDX,
+                    consumer_report, sizeof(consumer_report), NULL);
 }

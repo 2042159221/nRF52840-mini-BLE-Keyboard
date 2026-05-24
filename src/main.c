@@ -1,6 +1,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
+#include <input/encoder_manager.h>
 #include <input/input_manager.h>
 #include <mode/mode_manager.h>
 #include <power/power_manager.h>
@@ -25,6 +26,12 @@ int main(void)
         err = input_manager_init();
         if (err != 0) {
                 LOG_ERR("input init failed: %d", err);
+                return 0;
+        }
+
+        err = encoder_manager_init();
+        if (err != 0) {
+                LOG_ERR("encoder init failed: %d", err);
                 return 0;
         }
 
