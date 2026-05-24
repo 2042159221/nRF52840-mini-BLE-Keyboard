@@ -1,13 +1,16 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <zephyr/device.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/usb/class/usbd_hid.h>
 #include <zephyr/usb/usbd.h>
 
+#include <hid/hid_consumer.h>
 #include <hid/hid_report.h>
 #include <power/power_manager.h>
 
@@ -17,7 +20,59 @@ LOG_MODULE_REGISTER(transport_usb, LOG_LEVEL_INF);
 #define PRO_USB_PID 0x52F0
 #define PRO_USB_MAX_POWER 50
 
-static const uint8_t hid_report_desc[] = HID_KEYBOARD_REPORT_DESC();
+#define USB_REPORT_ID_KEYBOARD 1
+#define USB_REPORT_ID_CONSUMER 2
+#define USB_KEYBOARD_REPORT_LEN (1 + sizeof(struct hid_keyboard_report))
+#define USB_CONSUMER_REPORT_LEN (1 + sizeof(uint16_t))
+
+static const uint8_t hid_report_desc[] = {
+    0x05, 0x01,        /* Usage Page (Generic Desktop) */
+    0x09, 0x06,        /* Usage (Keyboard) */
+    0xA1, 0x01,        /* Collection (Application) */
+    0x85, USB_REPORT_ID_KEYBOARD,
+    0x05, 0x07,        /* Usage Page (Keyboard/Keypad) */
+    0x19, 0xE0,        /* Usage Minimum (Keyboard LeftControl) */
+    0x29, 0xE7,        /* Usage Maximum (Keyboard Right GUI) */
+    0x15, 0x00,        /* Logical Minimum (0) */
+    0x25, 0x01,        /* Logical Maximum (1) */
+    0x75, 0x01,        /* Report Size (1) */
+    0x95, 0x08,        /* Report Count (8) */
+    0x81, 0x02,        /* Input (Data, Variable, Absolute) */
+    0x95, 0x01,        /* Report Count (1) */
+    0x75, 0x08,        /* Report Size (8) */
+    0x81, 0x03,        /* Input (Constant, Variable, Absolute) */
+    0x95, 0x05,        /* Report Count (5) */
+    0x75, 0x01,        /* Report Size (1) */
+    0x05, 0x08,        /* Usage Page (LEDs) */
+    0x19, 0x01,        /* Usage Minimum (Num Lock) */
+    0x29, 0x05,        /* Usage Maximum (Kana) */
+    0x91, 0x02,        /* Output (Data, Variable, Absolute) */
+    0x95, 0x01,        /* Report Count (1) */
+    0x75, 0x03,        /* Report Size (3) */
+    0x91, 0x03,        /* Output (Constant, Variable, Absolute) */
+    0x95, 0x06,        /* Report Count (6) */
+    0x75, 0x08,        /* Report Size (8) */
+    0x15, 0x00,        /* Logical Minimum (0) */
+    0x25, 0x65,        /* Logical Maximum (101) */
+    0x05, 0x07,        /* Usage Page (Keyboard/Keypad) */
+    0x19, 0x00,        /* Usage Minimum (Reserved) */
+    0x29, 0x65,        /* Usage Maximum (Keyboard Application) */
+    0x81, 0x00,        /* Input (Data, Array, Absolute) */
+    0xC0,              /* End Collection */
+
+    0x05, 0x0C,        /* Usage Page (Consumer) */
+    0x09, 0x01,        /* Usage (Consumer Control) */
+    0xA1, 0x01,        /* Collection (Application) */
+    0x85, USB_REPORT_ID_CONSUMER,
+    0x15, 0x00,        /* Logical Minimum (0) */
+    0x26, 0xFF, 0x03,  /* Logical Maximum (0x03FF) */
+    0x19, 0x00,        /* Usage Minimum (Unassigned) */
+    0x2A, 0xFF, 0x03,  /* Usage Maximum (0x03FF) */
+    0x75, 0x10,        /* Report Size (16) */
+    0x95, 0x01,        /* Report Count (1) */
+    0x81, 0x00,        /* Input (Data, Array, Absolute) */
+    0xC0,              /* End Collection */
+};
 
 USBD_DEVICE_DEFINE(pro_keyboard_usbd,
            DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)),
@@ -270,6 +325,8 @@ bool transport_usb_ready(void)
 
 int transport_usb_send_keyboard_report(const struct hid_keyboard_report *report)
 {
+    uint8_t usb_report[USB_KEYBOARD_REPORT_LEN];
+
     if (report == NULL) {
         return -EINVAL;
     }
@@ -278,5 +335,26 @@ int transport_usb_send_keyboard_report(const struct hid_keyboard_report *report)
         return -ENOTCONN;
     }
 
-    return hid_device_submit_report(hid_device, sizeof(*report), (const uint8_t *)report);
+    usb_report[0] = USB_REPORT_ID_KEYBOARD;
+    memcpy(&usb_report[1], report, sizeof(*report));
+
+    return hid_device_submit_report(hid_device, sizeof(usb_report), usb_report);
+}
+
+int transport_usb_send_consumer_report(const struct hid_consumer_report *report)
+{
+    uint8_t usb_report[USB_CONSUMER_REPORT_LEN];
+
+    if (report == NULL) {
+        return -EINVAL;
+    }
+
+    if (!transport_usb_ready()) {
+        return -ENOTCONN;
+    }
+
+    usb_report[0] = USB_REPORT_ID_CONSUMER;
+    sys_put_le16(report->usage, &usb_report[1]);
+
+    return hid_device_submit_report(hid_device, sizeof(usb_report), usb_report);
 }
