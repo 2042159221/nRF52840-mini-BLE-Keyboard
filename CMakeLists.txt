@@ -7,6 +7,7 @@ target_include_directories(app PRIVATE include)
 
 target_sources(app PRIVATE
 	src/main.c
+	src/hid/hid_consumer.c
 	src/hid/hid_report.c
 	src/input/input_manager.c
 	src/keymap/keymap.c

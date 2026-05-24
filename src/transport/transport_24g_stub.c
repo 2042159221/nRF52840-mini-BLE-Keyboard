@@ -4,6 +4,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
+#include <hid/hid_consumer.h>
 #include <hid/hid_report.h>
 
 LOG_MODULE_REGISTER(transport_24g_stub, LOG_LEVEL_INF);
@@ -31,6 +32,12 @@ bool transport_24g_ready(void)
 }
 
 int transport_24g_send_keyboard_report(const struct hid_keyboard_report *report)
+{
+    ARG_UNUSED(report);
+    return -ENOTSUP;
+}
+
+int transport_24g_send_consumer_report(const struct hid_consumer_report *report)
 {
     ARG_UNUSED(report);
     return -ENOTSUP;
