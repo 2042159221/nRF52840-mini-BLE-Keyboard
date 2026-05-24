@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend spec index for embedded firmware module changes."}
+{"file": ".trellis/spec/backend/embedded-power-guidelines.md", "reason": "Power subsystem hardware and validation contracts for battery ADC and IP5306."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Shared thinking guide index for cross-layer and reuse checks."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Feature spans power hardware, state provider, policy, BLE service, and configuration."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "New helpers and constants must reuse existing power abstractions and avoid duplicate logic."}
