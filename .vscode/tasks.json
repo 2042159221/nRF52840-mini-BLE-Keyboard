@@ -2,6 +2,19 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "nRF: Verify NCS Toolchain",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ". '${workspaceFolder}/scripts/ncs-env.ps1'"
+            ],
+            "problemMatcher": []
+        },
+        {
             "label": "nRF: Configure environment",
             "type": "shell",
             "command": "powershell",
@@ -29,6 +42,33 @@
                 "kind": "build",
                 "isDefault": true
             },
+            "problemMatcher": []
+        },
+        {
+            "label": "nRF: West Build",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/scripts/build.ps1"
+            ],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "nRF: West Flash Erase",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "$ErrorActionPreference = 'Stop'; . '${workspaceFolder}/scripts/ncs-env.ps1'; & 'E:\\ncs\\toolchains\\fd21892d0f\\opt\\bin\\python.exe' -m west flash --erase -d '${workspaceFolder}/build'"
+            ],
             "problemMatcher": []
         },
         {
