@@ -5,6 +5,7 @@ build*/
 .claude/
 .codex/
 .trellis/
+.worktrees/
 .trellis-before-fix/
 *.log
 *.tmp
