@@ -38,7 +38,7 @@
 		keymap {
 			compatible = "input-keymap";
 			keymap = <
-				MATRIX_KEY(0, 3, INPUT_KEY_ESC)
+				MATRIX_KEY(0, 3, INPUT_KEY_MUTE)
 
 				MATRIX_KEY(1, 0, INPUT_KEY_NUMLOCK)
 				MATRIX_KEY(1, 1, INPUT_KEY_KPSLASH)
@@ -71,8 +71,20 @@
 		compatible = "zephyr,hid-device";
 		label = "HID0";
 		protocol-code = "keyboard";
-		in-report-size = <8>;
+		in-report-size = <9>;
 		in-polling-period-us = <1000>;
+	};
+
+	ec11_encoder: ec11-encoder {
+		compatible = "gpio-qdec";
+		status = "okay";
+		gpios = <&gpio0 10 (GPIO_PULL_UP | GPIO_ACTIVE_HIGH)>,
+			<&gpio1 6 (GPIO_PULL_UP | GPIO_ACTIVE_HIGH)>;
+		steps-per-period = <2>;
+		zephyr,axis = <INPUT_REL_WHEEL>;
+		sample-time-us = <2000>;
+		idle-poll-time-us = <2000>;
+		idle-timeout-ms = <200>;
 	};
 
 	zephyr,user {

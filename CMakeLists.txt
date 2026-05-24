@@ -9,6 +9,7 @@ target_sources(app PRIVATE
 	src/main.c
 	src/hid/hid_consumer.c
 	src/hid/hid_report.c
+	src/input/encoder_manager.c
 	src/input/input_manager.c
 	src/keymap/keymap.c
 	src/mode/mode_manager.c
