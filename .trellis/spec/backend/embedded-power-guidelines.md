@@ -24,6 +24,11 @@
 - Battery ADC uses P0.31 / AIN7 through a gated divider. Enable `BAT_ADC_EN` only around a sample and turn it off on success and failure paths.
 - Enabled divider ratio is currently R6 100k to R8 100k, so first-order VBAT estimate is `adc_mv * 2`.
 - P0.09 is NFC1, so board DTS must release NFCT pins as GPIO before using `BAT_ADC_EN`.
+- nRF52840 reset pin P0.18 must be enabled through board DTS UICR:
+  `&uicr { gpio-as-nreset; };`. Do not assign `CONFIG_GPIO_AS_PINRESET`
+  in defconfig or `prj.conf`; in NCS v3.2.3 / Zephyr 4.2.99 it is a
+  deprecated hidden symbol derived from Devicetree and will fail Kconfig
+  configuration if set directly.
 - USB VBUS state should reuse existing USB stack VBUS events before adding another owner for the same hardware signal.
 - Do not write IP5306 registers during boot unless a verified register map and hardware validation plan exist.
 
