@@ -67,7 +67,7 @@
                 "-ExecutionPolicy",
                 "Bypass",
                 "-Command",
-                "$ErrorActionPreference = 'Stop'; . '${workspaceFolder}/scripts/ncs-env.ps1'; & 'E:\\ncs\\toolchains\\fd21892d0f\\opt\\bin\\python.exe' -m west flash --erase -d '${workspaceFolder}/build'"
+                "$ErrorActionPreference = 'Stop'; . '${workspaceFolder}/scripts/ncs-env.ps1'; & 'E:\\ncs\\toolchains\\fd21892d0f\\opt\\bin\\python.exe' -m west flash --erase -d '${workspaceFolder}/build/PRO_Ble_mini_keyboard'"
             ],
             "problemMatcher": []
         },
@@ -84,6 +84,33 @@
                 "-Pristine"
             ],
             "problemMatcher": []
+        },
+        {
+            "label": "Run PC GUI",
+            "type": "shell",
+            "command": "E:\\ncs\\toolchains\\fd21892d0f\\opt\\bin\\python.exe",
+            "args": [
+                "-m",
+                "pc_gui.main",
+                "--port",
+                "${input:pcGuiPort}"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PYTHONNOUSERSITE": "1",
+                    "PYTHONUTF8": "1"
+                }
+            },
+            "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            "id": "pcGuiPort",
+            "type": "promptString",
+            "description": "USB CDC ACM serial port for PC GUI",
+            "default": "COM19"
         }
     ]
 }
