@@ -1,0 +1,1 @@
+"""Desktop configuration tool package."""
