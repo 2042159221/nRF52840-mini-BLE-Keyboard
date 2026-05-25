@@ -86,7 +86,24 @@
             "problemMatcher": []
         },
         {
-            "label": "Run PC GUI",
+            "label": "PC GUI: Run Mock",
+            "type": "shell",
+            "command": "E:\\ncs\\toolchains\\fd21892d0f\\opt\\bin\\python.exe",
+            "args": [
+                "-m",
+                "pc_gui.main"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PYTHONNOUSERSITE": "1",
+                    "PYTHONUTF8": "1"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "PC GUI: Run USB CDC ACM",
             "type": "shell",
             "command": "E:\\ncs\\toolchains\\fd21892d0f\\opt\\bin\\python.exe",
             "args": [
