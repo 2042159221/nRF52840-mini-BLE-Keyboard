@@ -38,6 +38,7 @@
 - Host frame format is `0x55 0xAA + version(1) + payload_len_le16 + protobuf_payload + crc16_le`.
 - Host frame CRC is non-reflected CRC-16/CCITT polynomial `0x1021`, seed `0xffff`, over `version + length + payload`.
 - Protobuf source of truth is `proto/device_comm.proto`; Python GUI copies must stay byte-for-byte equivalent when regenerated.
+- Firmware nanopb runtime must be provided by Zephyr's `CONFIG_NANOPB=y` module. Do not link the standalone `nanopb` CMake target into `app`, because it can compile without Zephyr/Cortex-M flags such as `-mthumb` and crash when host requests reach `pb_decode()`.
 - `DeviceConfig` protobuf fields are `uint32`, while firmware runtime fields are mostly `uint8_t`; host protocol must reject any value greater than `UINT8_MAX` before narrowing, then call `app_config_validate()` for semantic ranges such as brightness `0..100`.
 - Host requests other than `HelloReq` require a successful hello first and return `RESPONSE_CODE_NOT_READY` if the session is not ready.
 - `ConfigSetReq(save=true)` is the only normal config-set path that writes NVS. `ConfigSetReq(apply=true, save=false)` must apply runtime config without saving.
@@ -57,6 +58,7 @@
 - Unknown message body -> `RESPONSE_CODE_UNKNOWN_TYPE`.
 - Frame bad magic/version/length/CRC -> drop frame and log; do not pass payload to protobuf.
 - Missing CDC ACM devicetree node -> `host_comm_init()` returns `-ENODEV`; keyboard HID boot must continue.
+- `pb_istream_from_buffer()` / `pb_decode()` hard fault on Cortex-M with an instruction-access violation -> first check that final ELF resolves nanopb symbols from `modules/nanopb` and that the linked module object is compiled with Zephyr flags (`-mcpu=cortex-m4 -mthumb -D__ZEPHYR__`). `compile_commands.json` may also contain an unlinked `CMakeFiles/nanopb.dir` entry from CMake generation; do not treat that bare entry as proof of the final linked runtime.
 
 ### 5. Good / Base / Bad Cases
 
@@ -67,6 +69,7 @@
 - Bad: `host_protocol.c` calls `rgb_manager_set_mode()` directly.
 - Bad: using Zephyr `crc16_ccitt()` for the host frame when the PC codec uses a non-reflected CCITT variant.
 - Bad: writing Settings/NVS on every input event or RGB refresh.
+- Bad: `target_link_libraries(app PRIVATE nanopb)` without `CONFIG_NANOPB=y`, which links a standalone nanopb object built outside Zephyr's target flags.
 
 ### 6. Tests Required
 
@@ -76,6 +79,7 @@
 - Host-test protocol must include a truncation guard case such as `rgb_brightness = 257`, asserting `RESPONSE_CODE_INVALID_PARAM` and no persisted save.
 - Run a pristine Zephyr build after touching `CMakeLists.txt`, `prj.conf`, board DTS, host protocol, Settings store, or USB descriptors:
   `.\scripts\build.ps1 -Pristine -BuildDir "D:\b_ip5306_rtt_usb" -Board "mini-keyboard/nrf52840" -Snippet "rtt-console"`.
+- After changing nanopb integration, inspect `zephyr.map` / `arm-zephyr-eabi-nm` to confirm final nanopb symbols come from `modules/nanopb`; if using `compile_commands.json`, inspect the `modules/nanopb/CMakeFiles/modules__nanopb.dir` command and verify it has `-mthumb`.
 - Inspect generated `.config`/DTS when changing CDC ACM: confirm `CONFIG_USBD_CDC_ACM_CLASS=y` and `zephyr,cdc-acm-uart` exists under `zephyr_udc0`.
 
 ### 7. Wrong vs Correct

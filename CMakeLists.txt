@@ -13,7 +13,6 @@ include(nanopb)
 target_include_directories(app PRIVATE include)
 
 zephyr_nanopb_sources(app proto/device_comm.proto)
-target_link_libraries(app PRIVATE nanopb)
 
 target_sources(app PRIVATE
 	src/config/app_config.c
