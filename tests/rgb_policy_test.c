@@ -20,7 +20,7 @@ static void test_policy_defaults_to_battery_normal(void)
     rgb_policy_init(&policy);
 
     assert(policy.normal_brightness_percent == 25);
-    assert(policy.num_brightness_percent == 6);
+    assert(policy.num_brightness_percent == 15);
     assert(policy.refresh_period_ms == 33);
     assert(!policy.critical_shutdown);
 }
@@ -34,7 +34,7 @@ static void test_policy_uses_usb_brightness_when_present(void)
     rgb_policy_update(&policy, &state);
 
     assert(policy.normal_brightness_percent == 40);
-    assert(policy.num_brightness_percent == 8);
+    assert(policy.num_brightness_percent == 20);
     assert(policy.refresh_period_ms == 20);
     assert(!policy.critical_shutdown);
 }
@@ -48,7 +48,7 @@ static void test_policy_lowers_brightness_on_low_battery(void)
     rgb_policy_update(&policy, &state);
 
     assert(policy.normal_brightness_percent == 10);
-    assert(policy.num_brightness_percent == 4);
+    assert(policy.num_brightness_percent == 8);
     assert(policy.refresh_period_ms == 50);
     assert(!policy.critical_shutdown);
 }

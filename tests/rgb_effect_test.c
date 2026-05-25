@@ -64,19 +64,19 @@ static void test_static_off_and_num_overlay(void)
 
     rgb_policy_init(&policy);
     policy.normal_brightness_percent = 20;
-    policy.num_brightness_percent = 8;
+    policy.num_brightness_percent = 20;
 
     rgb_effect_init(&effect);
     rgb_effect_set_mode(&effect, RGB_MODE_STATIC);
     rgb_effect_set_color(&effect, (struct rgb_color){ .red = 0, .green = 0, .blue = 200 });
     rgb_effect_render(&effect, &policy, true, 0, pixels, RGB_LED_COUNT);
     assert_pixel(pixels, 1, 0, 0, 40);
-    assert_pixel(pixels, RGB_NUM_LOCK_INDEX, 20, 20, 20);
+    assert_pixel(pixels, RGB_NUM_LOCK_INDEX, 51, 51, 51);
 
     rgb_effect_set_mode(&effect, RGB_MODE_OFF);
     rgb_effect_render(&effect, &policy, true, 0, pixels, RGB_LED_COUNT);
     assert_pixel(pixels, 1, 0, 0, 0);
-    assert_pixel(pixels, RGB_NUM_LOCK_INDEX, 20, 20, 20);
+    assert_pixel(pixels, RGB_NUM_LOCK_INDEX, 51, 51, 51);
 
     policy.critical_shutdown = true;
     rgb_effect_render(&effect, &policy, true, 0, pixels, RGB_LED_COUNT);
