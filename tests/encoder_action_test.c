@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -12,6 +13,7 @@
 static uint16_t submitted_usages[8];
 static unsigned int submitted_count;
 static enum rgb_mode current_rgb_mode;
+static bool consumer_ready = true;
 
 void hid_consumer_report_press(struct hid_consumer_report *report, uint16_t usage)
 {
@@ -40,6 +42,12 @@ int transport_send_consumer_report(enum kb_mode mode,
     return 0;
 }
 
+bool transport_consumer_ready(enum kb_mode mode)
+{
+    assert(mode == KB_MODE_USB);
+    return consumer_ready;
+}
+
 enum rgb_mode rgb_manager_get_mode(void)
 {
     return current_rgb_mode;
@@ -52,6 +60,7 @@ void rgb_manager_set_mode(enum rgb_mode mode)
 
 static void reset_transport_spy(void)
 {
+    consumer_ready = true;
     submitted_count = 0;
     for (size_t i = 0; i < sizeof(submitted_usages) /
          sizeof(submitted_usages[0]); i++) {
@@ -97,6 +106,15 @@ static void test_invalid_action_is_rejected(void)
     assert(submitted_count == 0u);
 }
 
+static void test_transport_not_ready_does_not_send_report(void)
+{
+    reset_transport_spy();
+    consumer_ready = false;
+
+    assert(encoder_action_trigger(APP_ENCODER_ACTION_VOLUME_UP) == -ENOTCONN);
+    assert(submitted_count == 0u);
+}
+
 static void test_rgb_mode_next_cycles_modes(void)
 {
     current_rgb_mode = RGB_MODE_OFF;
@@ -115,6 +133,7 @@ int main(void)
     test_none_action_is_noop();
     test_consumer_actions_send_press_release_pulse();
     test_invalid_action_is_rejected();
+    test_transport_not_ready_does_not_send_report();
     test_rgb_mode_next_cycles_modes();
     return 0;
 }

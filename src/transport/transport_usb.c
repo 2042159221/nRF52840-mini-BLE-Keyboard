@@ -332,6 +332,11 @@ bool transport_usb_ready(void)
     return ready;
 }
 
+bool transport_usb_consumer_ready(void)
+{
+    return transport_usb_ready();
+}
+
 int transport_usb_send_keyboard_report(const struct hid_keyboard_report *report)
 {
     uint8_t usb_report[USB_KEYBOARD_REPORT_LEN];

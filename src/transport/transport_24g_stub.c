@@ -31,6 +31,11 @@ bool transport_24g_ready(void)
     return false;
 }
 
+bool transport_24g_consumer_ready(void)
+{
+    return false;
+}
+
 int transport_24g_send_keyboard_report(const struct hid_keyboard_report *report)
 {
     ARG_UNUSED(report);

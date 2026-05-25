@@ -144,6 +144,7 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
                  enum bt_security_err err)
 {
     int unpair_err;
+    int disconnect_err;
 
     if (conn != ble_conn) {
         return;
@@ -166,6 +167,16 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
             }
         }
 
+        if (transport_ble_security_error_requires_disconnect(err)) {
+            disconnect_err = bt_conn_disconnect(conn, BT_HCI_ERR_AUTH_FAIL);
+            if (disconnect_err != 0) {
+                LOG_WRN("BLE disconnect after security failure failed: %d",
+                    disconnect_err);
+            } else {
+                LOG_WRN("BLE disconnect requested after security failure");
+            }
+        }
+
         return;
     }
 
@@ -182,17 +193,29 @@ static void pairing_complete(struct bt_conn *conn, bool bonded)
 static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
 {
     int unpair_err;
+    int disconnect_err;
 
     LOG_WRN("BLE pairing failed: %s (%d)",
         bt_security_err_to_str(reason), reason);
 
     if (!transport_ble_security_error_requires_bond_reset(reason)) {
-        return;
+        goto disconnect;
     }
 
     unpair_err = bt_unpair(BT_ID_DEFAULT, bt_conn_get_dst(conn));
     if (unpair_err != 0) {
         LOG_WRN("BLE bond cleanup after pairing failure failed: %d", unpair_err);
+    }
+
+disconnect:
+    if (transport_ble_security_error_requires_disconnect(reason)) {
+        disconnect_err = bt_conn_disconnect(conn, BT_HCI_ERR_AUTH_FAIL);
+        if (disconnect_err != 0) {
+            LOG_WRN("BLE disconnect after pairing failure failed: %d",
+                disconnect_err);
+        } else {
+            LOG_WRN("BLE disconnect requested after pairing failure");
+        }
     }
 }
 
@@ -449,6 +472,11 @@ int transport_ble_disable(void)
 bool transport_ble_ready(void)
 {
     return ble_conn_ready_for_keyboard_report();
+}
+
+bool transport_ble_consumer_ready(void)
+{
+    return ble_conn_ready_for_consumer_report();
 }
 
 int transport_ble_send_keyboard_report(const struct hid_keyboard_report *report)

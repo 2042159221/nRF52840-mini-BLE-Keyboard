@@ -16,6 +16,11 @@ bool transport_ble_security_error_requires_bond_reset(int security_err)
     return security_err == TRANSPORT_BLE_SECURITY_ERR_PIN_OR_KEY_MISSING;
 }
 
+bool transport_ble_security_error_requires_disconnect(int security_err)
+{
+    return security_err != 0;
+}
+
 int transport_ble_security_reconnect_delay_ms(int security_err)
 {
     if (transport_ble_security_error_requires_bond_reset(security_err)) {

@@ -19,6 +19,9 @@
 - `void hid_consumer_report_press(struct hid_consumer_report *report, uint16_t usage)`
 - `void hid_consumer_report_release(struct hid_consumer_report *report)`
 - `int transport_send_consumer_report(enum kb_mode mode, const struct hid_consumer_report *report)`
+- `bool transport_consumer_ready(enum kb_mode mode)`
+- `int encoder_action_init(void)`
+- `int encoder_action_submit(uint8_t action)`
 - `int transport_usb_send_consumer_report(const struct hid_consumer_report *report)`
 - `int transport_ble_send_consumer_report(const struct hid_consumer_report *report)`
 - `int transport_24g_send_consumer_report(const struct hid_consumer_report *report)`
@@ -55,6 +58,16 @@ return bt_hids_inp_rep_send(&hids_obj, ble_conn, INPUT_REP_CONSUMER_IDX,
   require connection, security, report mode, and the Consumer input report CCCD
   subscription. Do not gate Consumer reports with `transport_ready()`, because
   that API currently means keyboard-report readiness.
+- Zephyr input callbacks must not send Consumer HID reports directly. Encoder
+  rotation and EC11 push actions must call `encoder_action_submit()` so the
+  actual press/release pulse runs in the dedicated `encoder_action` thread.
+- `encoder_action_init()` starts the worker during boot. `encoder_action_submit()`
+  uses `k_msgq_put(..., K_NO_WAIT)` and must never block the input callback. If
+  the queue is full it returns `-ENOMSG`; callers should log a rate-limited
+  warning and drop the excess action.
+- If the Consumer transport is not ready, the worker skips that action and logs
+  a rate-limited warning. It does not retry the skipped action, because queued
+  stale knob detents would surprise the host after reconnect.
 - BLE boot protocol does not carry Consumer Control reports; return `-ENOTSUP`
   from the BLE Consumer send path while in boot mode.
 - The reserved 2.4G transport must return `-ENOTSUP` for Consumer reports until
@@ -66,6 +79,8 @@ return bt_hids_inp_rep_send(&hids_obj, ble_conn, INPUT_REP_CONSUMER_IDX,
 - USB transport disabled or HID interface not ready -> return `-ENOTCONN`.
 - BLE disconnected, not encrypted to `BT_SECURITY_L2`, or Consumer notifications
   not subscribed -> return `-ENOTCONN`.
+- `encoder_action_submit()` queue full in input callback -> return `-ENOMSG` and
+  drop the action without blocking Zephyr's input/sysworkqueue path.
 - BLE boot mode Consumer send -> return `-ENOTSUP`.
 - 2.4G Consumer send before implementation -> return `-ENOTSUP`.
 - First half of a Consumer pulse fails -> do not send the release half; return
@@ -77,11 +92,17 @@ return bt_hids_inp_rep_send(&hids_obj, ble_conn, INPUT_REP_CONSUMER_IDX,
   `0x0000` through the currently selected transport.
 - Good: matrix EC11 push maps to `INPUT_KEY_MUTE`; `input_manager.c` intercepts
   the press and sends one Mute pulse, while release is ignored.
+- Good: input callback enqueues one action with `encoder_action_submit()` and
+  returns quickly; the worker thread performs `transport_consumer_ready()` and
+  sends the HID pulse.
 - Base: USB and BLE descriptors both expose keyboard Report ID 1 and Consumer
   Report ID 2, but USB send buffers include the ID while BLE payloads do not.
 - Bad: using `transport_ready(mode)` before a Consumer send in BLE mode. Keyboard
   notifications may be subscribed while Consumer notifications are not, or vice
   versa.
+- Bad: calling `encoder_action_trigger()` from a Zephyr input callback. Slow or
+  disconnected transports can fill the input queue and produce `input: Event
+  dropped, queue full`.
 - Bad: sending only `0x00E9` without a following `0x0000`, which can leave the
   host seeing a held Consumer key or coalescing later events incorrectly.
 
@@ -90,6 +111,8 @@ return bt_hids_inp_rep_send(&hids_obj, ble_conn, INPUT_REP_CONSUMER_IDX,
 - Unit-test `hid_consumer_report_press()` and `hid_consumer_report_release()`.
 - Host-test pure mapping logic when adding new input-code to HID-usage
   translation.
+- Unit-test Consumer action mapping and the `transport_consumer_ready()` guard
+  so not-ready transports do not receive partial press/release reports.
 - Run `git diff --check` after descriptor or report-buffer edits.
 - Run a pristine Zephyr build after touching USB/BLE descriptors, board DTS,
   Kconfig, CMake, or transport signatures. Prefer:

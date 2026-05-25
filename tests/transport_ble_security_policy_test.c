@@ -6,6 +6,7 @@
 #define BT_SECURITY_ERR_AUTH_FAIL 1
 #define BT_SECURITY_ERR_PIN_OR_KEY_MISSING 2
 #define BT_SECURITY_ERR_AUTH_REQUIREMENT 4
+#define BT_SECURITY_ERR_UNSPECIFIED 9
 
 static void test_pin_or_key_missing_requires_bond_reset(void)
 {
@@ -24,6 +25,8 @@ static void test_other_security_errors_do_not_reset_bonds(void)
            BT_SECURITY_ERR_AUTH_FAIL));
     assert(!transport_ble_security_error_requires_bond_reset(
            BT_SECURITY_ERR_AUTH_REQUIREMENT));
+    assert(!transport_ble_security_error_requires_bond_reset(
+           BT_SECURITY_ERR_UNSPECIFIED));
     assert(transport_ble_security_reconnect_delay_ms(
            BT_SECURITY_ERR_SUCCESS) ==
            TRANSPORT_BLE_SECURITY_RECONNECT_DELAY_MS);
@@ -32,9 +35,22 @@ static void test_other_security_errors_do_not_reset_bonds(void)
            TRANSPORT_BLE_SECURITY_RECONNECT_DELAY_MS);
 }
 
+static void test_security_failures_require_disconnect(void)
+{
+    assert(!transport_ble_security_error_requires_disconnect(
+           BT_SECURITY_ERR_SUCCESS));
+    assert(transport_ble_security_error_requires_disconnect(
+           BT_SECURITY_ERR_AUTH_FAIL));
+    assert(transport_ble_security_error_requires_disconnect(
+           BT_SECURITY_ERR_PIN_OR_KEY_MISSING));
+    assert(transport_ble_security_error_requires_disconnect(
+           BT_SECURITY_ERR_UNSPECIFIED));
+}
+
 int main(void)
 {
     test_pin_or_key_missing_requires_bond_reset();
     test_other_security_errors_do_not_reset_bonds();
+    test_security_failures_require_disconnect();
     return 0;
 }

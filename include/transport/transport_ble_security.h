@@ -11,6 +11,7 @@ extern "C" {
 #define TRANSPORT_BLE_SECURITY_BOND_RESET_DELAY_MS 10000
 
 bool transport_ble_security_error_requires_bond_reset(int security_err);
+bool transport_ble_security_error_requires_disconnect(int security_err);
 int transport_ble_security_reconnect_delay_ms(int security_err);
 
 #ifdef __cplusplus

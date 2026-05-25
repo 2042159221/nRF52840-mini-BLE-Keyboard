@@ -10,6 +10,7 @@ int transport_usb_init(void);
 int transport_usb_enable(void);
 int transport_usb_disable(void);
 bool transport_usb_ready(void);
+bool transport_usb_consumer_ready(void);
 int transport_usb_send_keyboard_report(const struct hid_keyboard_report *report);
 int transport_usb_send_consumer_report(const struct hid_consumer_report *report);
 
@@ -17,6 +18,7 @@ int transport_ble_init(void);
 int transport_ble_enable(void);
 int transport_ble_disable(void);
 bool transport_ble_ready(void);
+bool transport_ble_consumer_ready(void);
 int transport_ble_send_keyboard_report(const struct hid_keyboard_report *report);
 int transport_ble_send_consumer_report(const struct hid_consumer_report *report);
 
@@ -24,6 +26,7 @@ int transport_24g_init(void);
 int transport_24g_enable(void);
 int transport_24g_disable(void);
 bool transport_24g_ready(void);
+bool transport_24g_consumer_ready(void);
 int transport_24g_send_keyboard_report(const struct hid_keyboard_report *report);
 int transport_24g_send_consumer_report(const struct hid_consumer_report *report);
 
@@ -80,6 +83,20 @@ bool transport_ready(enum kb_mode mode)
         return transport_ble_ready();
     case KB_MODE_24G_RESERVED:
         return transport_24g_ready();
+    default:
+        return false;
+    }
+}
+
+bool transport_consumer_ready(enum kb_mode mode)
+{
+    switch (mode) {
+    case KB_MODE_USB:
+        return transport_usb_consumer_ready();
+    case KB_MODE_BLE:
+        return transport_ble_consumer_ready();
+    case KB_MODE_24G_RESERVED:
+        return transport_24g_consumer_ready();
     default:
         return false;
     }

@@ -79,13 +79,12 @@ static void input_manager_event_cb(struct input_event *evt, void *user_data)
 
         LOG_INF("encoder press action: %u", action);
 
-        err = encoder_action_trigger(action);
-        if (err == -ENOTCONN) {
+        err = encoder_action_submit(action);
+        if (err == -ENOMSG) {
             LOG_WRN_RATELIMIT_RATE(TRANSPORT_NOT_READY_LOG_INTERVAL_MS,
-                "encoder press deferred: mode %d transport is not ready",
-                mode_manager_get_mode());
+                "encoder press action queue full");
         } else if (err != 0) {
-            LOG_WRN("encoder press action failed: %d", err);
+            LOG_WRN("encoder press action submit failed: %d", err);
         }
 
         return;

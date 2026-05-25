@@ -32,7 +32,7 @@ static void encoder_manager_event_cb(struct input_event *evt, void *user_data)
     event_name = evt->value > 0 ? "encoder cw" : "encoder ccw";
     pulses = evt->value > 0 ? (uint32_t)evt->value : (uint32_t)-evt->value;
 
-    LOG_INF("%s: %d", event_name, evt->value);
+    LOG_DBG("%s: %d", event_name, evt->value);
 
     if (app_config_get(&config) == 0) {
         action = evt->value > 0 ? config.encoder_cw_action :
@@ -40,13 +40,15 @@ static void encoder_manager_event_cb(struct input_event *evt, void *user_data)
     }
 
     while (pulses-- > 0U) {
-        int err = encoder_action_trigger(action);
+        int err = encoder_action_submit(action);
 
-        if (err == -ENOTCONN) {
+        if (err == -ENOMSG) {
             LOG_WRN_RATELIMIT_RATE(TRANSPORT_NOT_READY_LOG_INTERVAL_MS,
-                "%s deferred: transport is not ready", event_name);
+                "%s action queue full", event_name);
+            break;
         } else if (err != 0) {
-            LOG_WRN("%s action failed: %d", event_name, err);
+            LOG_WRN("%s action submit failed: %d", event_name, err);
+            break;
         }
     }
 }

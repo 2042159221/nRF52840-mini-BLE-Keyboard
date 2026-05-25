@@ -11,6 +11,8 @@ extern "C" {
 
 int encoder_action_trigger(uint8_t action);
 int encoder_action_trigger_rgb_mode_next(void);
+int encoder_action_init(void);
+int encoder_action_submit(uint8_t action);
 
 #ifdef __cplusplus
 }

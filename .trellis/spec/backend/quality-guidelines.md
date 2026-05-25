@@ -90,6 +90,10 @@ storm while the user is trying to remove the host-side pairing. Keep the delay
 policy in a small helper and cover it with a host regression test.
 
 Other security failures should be logged but must not blindly erase bonds.
+They should also actively disconnect the failed link so the product does not
+remain in a visually connected but non-HID-ready state after
+`BT_SECURITY_ERR_UNSPECIFIED`, authentication failure, or similar pairing
+errors.
 
 ### Mode selector calibration must follow measured board voltages
 
