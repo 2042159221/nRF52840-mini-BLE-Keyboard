@@ -9,6 +9,7 @@
 #endif
 #include <zephyr/logging/log.h>
 
+#include <config/app_config.h>
 #include <keyboard/keyboard_led_state.h>
 #include <power/power_state.h>
 #include <rgb/rgb_effect.h>
@@ -25,6 +26,7 @@ static struct rgb_color rgb_frame[RGB_LED_COUNT];
 static struct k_work_delayable rgb_refresh_work;
 static bool rgb_initialized;
 static bool rgb_hw_available;
+static uint8_t rgb_numlock_policy = APP_NUMLOCK_ALWAYS_WHITE;
 
 static void rgb_manager_schedule(uint32_t delay_ms)
 {
@@ -57,6 +59,40 @@ static void rgb_power_state_listener(const struct power_state_snapshot *snapshot
     rgb_manager_mark_dirty();
 }
 
+static enum rgb_mode app_rgb_mode_to_rgb_mode(uint8_t mode)
+{
+    switch (mode) {
+    case APP_RGB_MODE_STATIC:
+        return RGB_MODE_STATIC;
+    case APP_RGB_MODE_KEY_REACTIVE:
+        return RGB_MODE_KEY_REACTIVE;
+    case APP_RGB_MODE_OFF:
+    default:
+        return RGB_MODE_OFF;
+    }
+}
+
+static void rgb_config_listener(const struct app_config *config, void *user_data)
+{
+    ARG_UNUSED(user_data);
+
+    rgb_manager_apply_config(config);
+}
+
+static bool rgb_num_lock_active(void)
+{
+    if (rgb_numlock_policy == APP_NUMLOCK_ALWAYS_WHITE) {
+        return true;
+    }
+
+    if (rgb_numlock_policy == APP_NUMLOCK_OFF_WHEN_LOW_POWER &&
+        rgb_policy.power_limit_percent <= 20u) {
+        return false;
+    }
+
+    return keyboard_led_state_num_lock();
+}
+
 static void rgb_refresh_work_handler(struct k_work *work)
 {
     uint32_t now_ms;
@@ -75,7 +111,7 @@ static void rgb_refresh_work_handler(struct k_work *work)
     }
 
     now_ms = k_uptime_get_32();
-    rgb_effect_render(&rgb_effect, &rgb_policy, keyboard_led_state_num_lock(),
+    rgb_effect_render(&rgb_effect, &rgb_policy, rgb_num_lock_active(),
               now_ms, rgb_frame, RGB_LED_COUNT);
 
     err = rgb_hw_show(rgb_frame, RGB_LED_COUNT);
@@ -142,6 +178,11 @@ int rgb_manager_init(void)
         LOG_WRN("RGB keyboard LED subscription failed: %d", err);
     }
 
+    err = app_config_subscribe(rgb_config_listener, NULL);
+    if (err < 0) {
+        LOG_WRN("RGB config subscription failed: %d", err);
+    }
+
     err = rgb_hw_init();
     if (err < 0) {
         LOG_WRN("RGB hardware unavailable: %d", err);
@@ -176,5 +217,28 @@ void rgb_manager_set_color(uint8_t red, uint8_t green, uint8_t blue)
     };
 
     rgb_effect_set_color(&rgb_effect, color);
+    rgb_manager_mark_dirty();
+}
+
+void rgb_manager_apply_config(const struct app_config *config)
+{
+    struct rgb_color color;
+    enum rgb_mode mode;
+
+    if (config == NULL) {
+        return;
+    }
+
+    mode = config->rgb_enable ?
+           app_rgb_mode_to_rgb_mode(config->rgb_mode) : RGB_MODE_OFF;
+
+    color.red = config->rgb_red;
+    color.green = config->rgb_green;
+    color.blue = config->rgb_blue;
+    rgb_numlock_policy = config->numlock_policy;
+
+    rgb_effect_set_mode(&rgb_effect, mode);
+    rgb_effect_set_color(&rgb_effect, color);
+    rgb_policy_set_user_brightness(&rgb_policy, config->rgb_brightness);
     rgb_manager_mark_dirty();
 }

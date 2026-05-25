@@ -19,7 +19,9 @@ static void test_policy_defaults_to_battery_normal(void)
 
     rgb_policy_init(&policy);
 
-    assert(policy.normal_brightness_percent == 25);
+    assert(policy.user_brightness_percent == 30);
+    assert(policy.power_limit_percent == 50);
+    assert(policy.normal_brightness_percent == 30);
     assert(policy.num_brightness_percent == 15);
     assert(policy.refresh_period_ms == 33);
     assert(!policy.critical_shutdown);
@@ -33,7 +35,8 @@ static void test_policy_uses_usb_brightness_when_present(void)
     rgb_policy_init(&policy);
     rgb_policy_update(&policy, &state);
 
-    assert(policy.normal_brightness_percent == 40);
+    assert(policy.power_limit_percent == 100);
+    assert(policy.normal_brightness_percent == 30);
     assert(policy.num_brightness_percent == 20);
     assert(policy.refresh_period_ms == 20);
     assert(!policy.critical_shutdown);
@@ -47,7 +50,8 @@ static void test_policy_lowers_brightness_on_low_battery(void)
     rgb_policy_init(&policy);
     rgb_policy_update(&policy, &state);
 
-    assert(policy.normal_brightness_percent == 10);
+    assert(policy.power_limit_percent == 20);
+    assert(policy.normal_brightness_percent == 20);
     assert(policy.num_brightness_percent == 8);
     assert(policy.refresh_period_ms == 50);
     assert(!policy.critical_shutdown);
@@ -67,11 +71,37 @@ static void test_policy_turns_off_on_critical(void)
     assert(policy.critical_shutdown);
 }
 
+static void test_policy_caps_user_brightness_by_power_limit(void)
+{
+    struct rgb_policy policy;
+    struct power_state_snapshot state = snapshot(POWER_LEVEL_STATE_NORMAL, true);
+
+    rgb_policy_init(&policy);
+    rgb_policy_set_user_brightness(&policy, 80);
+    rgb_policy_update(&policy, &state);
+
+    assert(policy.normal_brightness_percent == 80);
+
+    state = snapshot(POWER_LEVEL_STATE_NORMAL, false);
+    rgb_policy_update(&policy, &state);
+    assert(policy.normal_brightness_percent == 50);
+
+    state = snapshot(POWER_LEVEL_STATE_LOW, false);
+    rgb_policy_update(&policy, &state);
+    assert(policy.normal_brightness_percent == 20);
+
+    state = snapshot(POWER_LEVEL_STATE_CRITICAL, true);
+    rgb_policy_update(&policy, &state);
+    assert(policy.normal_brightness_percent == 0);
+    assert(policy.critical_shutdown);
+}
+
 int main(void)
 {
     test_policy_defaults_to_battery_normal();
     test_policy_uses_usb_brightness_when_present();
     test_policy_lowers_brightness_on_low_battery();
     test_policy_turns_off_on_critical();
+    test_policy_caps_user_brightness_by_power_limit();
     return 0;
 }

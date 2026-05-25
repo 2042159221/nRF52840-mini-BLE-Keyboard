@@ -3,12 +3,28 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(PRO_Ble_mini_keyboard)
 
+if(NOT c_std_11 IN_LIST CMAKE_C_COMPILE_FEATURES)
+	list(APPEND CMAKE_C_COMPILE_FEATURES c_std_11)
+endif()
+
+list(APPEND CMAKE_MODULE_PATH ${ZEPHYR_BASE}/modules/nanopb)
+include(nanopb)
+
 target_include_directories(app PRIVATE include)
 
+zephyr_nanopb_sources(app proto/device_comm.proto)
+target_link_libraries(app PRIVATE nanopb)
+
 target_sources(app PRIVATE
+	src/config/app_config.c
+	src/config/app_config_store.c
+	src/host/host_frame.c
+	src/host/host_protocol.c
+	src/host/host_comm.c
 	src/main.c
 	src/hid/hid_consumer.c
 	src/hid/hid_report.c
+	src/input/encoder_action.c
 	src/input/encoder_manager.c
 	src/input/input_manager.c
 	src/keymap/keymap.c

@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package keyboard;
+
+message DeviceMessage {
+  uint32 msg_id = 10;
+  uint32 reply_to = 11;
+
+  oneof body {
+    HelloReq hello_req = 1;
+    HelloRsp hello_rsp = 2;
+
+    ConfigGetReq config_get_req = 20;
+    ConfigGetRsp config_get_rsp = 21;
+    ConfigSetReq config_set_req = 22;
+    ConfigSetRsp config_set_rsp = 23;
+    ConfigSaveReq config_save_req = 24;
+    FactoryResetReq factory_reset_req = 25;
+
+    DeviceStatusReq device_status_req = 30;
+    DeviceStatusRsp device_status_rsp = 31;
+
+    Response response = 100;
+  }
+}
+
+message HelloReq {
+  uint32 protocol_version = 1;
+  string app_name = 2;
+}
+
+message HelloRsp {
+  uint32 protocol_version = 1;
+  uint32 vendor_id = 2;
+  uint32 product_id = 3;
+  uint32 firmware_major = 4;
+  uint32 firmware_minor = 5;
+  uint32 firmware_patch = 6;
+  uint32 capability_flags = 7;
+}
+
+message DeviceConfig {
+  uint32 version = 1;
+
+  bool rgb_enable = 2;
+  uint32 rgb_mode = 3;
+  uint32 rgb_brightness = 4;
+  uint32 rgb_red = 5;
+  uint32 rgb_green = 6;
+  uint32 rgb_blue = 7;
+  uint32 numlock_policy = 8;
+
+  uint32 encoder_cw_action = 9;
+  uint32 encoder_ccw_action = 10;
+  uint32 encoder_press_action = 11;
+
+  uint32 mode_policy = 12;
+  uint32 default_mode = 13;
+}
+
+message ConfigGetReq {}
+
+message ConfigGetRsp {
+  DeviceConfig config = 1;
+}
+
+message ConfigSetReq {
+  DeviceConfig config = 1;
+  bool apply = 2;
+  bool save = 3;
+}
+
+message ConfigSetRsp {
+  ResponseCode code = 1;
+  DeviceConfig effective_config = 2;
+}
+
+message ConfigSaveReq {}
+
+message FactoryResetReq {}
+
+message DeviceStatusReq {}
+
+message DeviceStatusRsp {
+  uint32 current_mode = 1;
+  uint32 battery_percent = 2;
+  uint32 power_level = 3;
+  bool usb_present = 4;
+  bool charging = 5;
+}
+
+message Response {
+  ResponseCode code = 1;
+  string message = 2;
+}
+
+enum ResponseCode {
+  RESPONSE_CODE_OK = 0;
+  RESPONSE_CODE_UNKNOWN_TYPE = 1;
+  RESPONSE_CODE_INVALID_LENGTH = 2;
+  RESPONSE_CODE_INVALID_PARAM = 3;
+  RESPONSE_CODE_NOT_READY = 4;
+  RESPONSE_CODE_INTERNAL_ERROR = 5;
+  RESPONSE_CODE_STORAGE_ERROR = 6;
+}

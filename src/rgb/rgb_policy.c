@@ -5,15 +5,29 @@
 #include <power/power_state.h>
 #include <rgb/rgb_policy.h>
 
-#define RGB_POLICY_USB_NORMAL_BRIGHTNESS_PERCENT 40u
-#define RGB_POLICY_USB_NUM_BRIGHTNESS_PERCENT 20u
-#define RGB_POLICY_BATTERY_NORMAL_BRIGHTNESS_PERCENT 25u
-#define RGB_POLICY_BATTERY_NUM_BRIGHTNESS_PERCENT 15u
-#define RGB_POLICY_LOW_NORMAL_BRIGHTNESS_PERCENT 10u
-#define RGB_POLICY_LOW_NUM_BRIGHTNESS_PERCENT 8u
+#define RGB_POLICY_DEFAULT_USER_BRIGHTNESS_PERCENT 30u
+#define RGB_POLICY_USB_NORMAL_LIMIT_PERCENT 100u
+#define RGB_POLICY_USB_NUM_LIMIT_PERCENT 20u
+#define RGB_POLICY_BATTERY_NORMAL_LIMIT_PERCENT 50u
+#define RGB_POLICY_BATTERY_NUM_LIMIT_PERCENT 15u
+#define RGB_POLICY_LOW_NORMAL_LIMIT_PERCENT 20u
+#define RGB_POLICY_LOW_NUM_LIMIT_PERCENT 8u
 #define RGB_POLICY_FAST_REFRESH_MS 20u
 #define RGB_POLICY_BATTERY_REFRESH_MS 33u
 #define RGB_POLICY_LOW_REFRESH_MS 50u
+
+static uint8_t min_percent(uint8_t a, uint8_t b)
+{
+    return a < b ? a : b;
+}
+
+static void rgb_policy_apply_effective_brightness(struct rgb_policy *policy)
+{
+    policy->normal_brightness_percent =
+        min_percent(policy->user_brightness_percent,
+                policy->power_limit_percent);
+    policy->num_brightness_percent = policy->num_power_limit_percent;
+}
 
 void rgb_policy_init(struct rgb_policy *policy)
 {
@@ -21,12 +35,27 @@ void rgb_policy_init(struct rgb_policy *policy)
         return;
     }
 
-    policy->normal_brightness_percent =
-        RGB_POLICY_BATTERY_NORMAL_BRIGHTNESS_PERCENT;
-    policy->num_brightness_percent =
-        RGB_POLICY_BATTERY_NUM_BRIGHTNESS_PERCENT;
+    policy->user_brightness_percent = RGB_POLICY_DEFAULT_USER_BRIGHTNESS_PERCENT;
+    policy->power_limit_percent = RGB_POLICY_BATTERY_NORMAL_LIMIT_PERCENT;
+    policy->num_power_limit_percent = RGB_POLICY_BATTERY_NUM_LIMIT_PERCENT;
+    rgb_policy_apply_effective_brightness(policy);
     policy->refresh_period_ms = RGB_POLICY_BATTERY_REFRESH_MS;
     policy->critical_shutdown = false;
+}
+
+void rgb_policy_set_user_brightness(struct rgb_policy *policy,
+                    uint8_t brightness_percent)
+{
+    if (policy == NULL) {
+        return;
+    }
+
+    if (brightness_percent > 100u) {
+        brightness_percent = 100u;
+    }
+
+    policy->user_brightness_percent = brightness_percent;
+    rgb_policy_apply_effective_brightness(policy);
 }
 
 void rgb_policy_update(struct rgb_policy *policy,
@@ -55,6 +84,8 @@ void rgb_policy_update(struct rgb_policy *policy,
     }
 
     if (level_valid && level == POWER_LEVEL_STATE_CRITICAL) {
+        policy->power_limit_percent = 0;
+        policy->num_power_limit_percent = 0;
         policy->normal_brightness_percent = 0;
         policy->num_brightness_percent = 0;
         policy->refresh_period_ms = RGB_POLICY_LOW_REFRESH_MS;
@@ -65,26 +96,23 @@ void rgb_policy_update(struct rgb_policy *policy,
     policy->critical_shutdown = false;
 
     if (level_valid && level == POWER_LEVEL_STATE_LOW) {
-        policy->normal_brightness_percent =
-            RGB_POLICY_LOW_NORMAL_BRIGHTNESS_PERCENT;
-        policy->num_brightness_percent =
-            RGB_POLICY_LOW_NUM_BRIGHTNESS_PERCENT;
+        policy->power_limit_percent = RGB_POLICY_LOW_NORMAL_LIMIT_PERCENT;
+        policy->num_power_limit_percent = RGB_POLICY_LOW_NUM_LIMIT_PERCENT;
+        rgb_policy_apply_effective_brightness(policy);
         policy->refresh_period_ms = RGB_POLICY_LOW_REFRESH_MS;
         return;
     }
 
     if (usb_present) {
-        policy->normal_brightness_percent =
-            RGB_POLICY_USB_NORMAL_BRIGHTNESS_PERCENT;
-        policy->num_brightness_percent =
-            RGB_POLICY_USB_NUM_BRIGHTNESS_PERCENT;
+        policy->power_limit_percent = RGB_POLICY_USB_NORMAL_LIMIT_PERCENT;
+        policy->num_power_limit_percent = RGB_POLICY_USB_NUM_LIMIT_PERCENT;
+        rgb_policy_apply_effective_brightness(policy);
         policy->refresh_period_ms = RGB_POLICY_FAST_REFRESH_MS;
         return;
     }
 
-    policy->normal_brightness_percent =
-        RGB_POLICY_BATTERY_NORMAL_BRIGHTNESS_PERCENT;
-    policy->num_brightness_percent =
-        RGB_POLICY_BATTERY_NUM_BRIGHTNESS_PERCENT;
+    policy->power_limit_percent = RGB_POLICY_BATTERY_NORMAL_LIMIT_PERCENT;
+    policy->num_power_limit_percent = RGB_POLICY_BATTERY_NUM_LIMIT_PERCENT;
+    rgb_policy_apply_effective_brightness(policy);
     policy->refresh_period_ms = RGB_POLICY_BATTERY_REFRESH_MS;
 }

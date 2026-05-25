@@ -1,6 +1,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
+#include <config/app_config.h>
+#include <config/app_config_store.h>
+#include <host/host_comm.h>
 #include <input/encoder_manager.h>
 #include <input/input_manager.h>
 #include <mode/mode_manager.h>
@@ -18,10 +21,26 @@ int main(void)
                 LOG_ERR("power manager init failed: %d", err);
         }
 
+        err = app_config_init();
+        if (err != 0) {
+                LOG_ERR("app config init failed: %d", err);
+                return 0;
+        }
+
+        err = app_config_store_load();
+        if (err != 0) {
+                LOG_WRN("app config load failed: %d", err);
+        }
+
         err = transport_init();
         if (err != 0) {
                 LOG_ERR("transport init failed: %d", err);
                 return 0;
+        }
+
+        err = host_comm_init();
+        if (err != 0) {
+                LOG_WRN("host config channel init failed: %d", err);
         }
 
         err = input_manager_init();
@@ -46,6 +65,8 @@ int main(void)
                 LOG_ERR("mode manager init failed: %d", err);
                 return 0;
         }
+
+        app_config_notify_all();
 
         LOG_INF("mini keyboard application started");
         return 0;

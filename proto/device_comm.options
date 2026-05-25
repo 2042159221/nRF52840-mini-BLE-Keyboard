@@ -1,0 +1,2 @@
+keyboard.HelloReq.app_name max_size:32
+keyboard.Response.message max_size:64

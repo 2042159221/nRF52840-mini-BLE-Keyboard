@@ -10,9 +10,10 @@
 #endif
 #include <zephyr/logging/log.h>
 
-#include <hid/hid_consumer.h>
+#include <config/app_config.h>
 #include <hid/hid_report.h>
 #include <hid/hid_usage.h>
+#include <input/encoder_action.h>
 #include <input/input_manager.h>
 #include <keymap/keymap.h>
 #include <mode/mode_manager.h>
@@ -27,7 +28,6 @@ static struct hid_keyboard_report keyboard_report;
 
 #if defined(CONFIG_INPUT)
 static int send_keyboard_report_on_mode(enum kb_mode mode);
-static int send_consumer_report_on_mode(enum kb_mode mode, uint16_t usage);
 
 static int send_keyboard_report(void)
 {
@@ -42,21 +42,6 @@ static int send_keyboard_report_on_mode(enum kb_mode mode)
     }
 
     return transport_send_keyboard_report(mode, &keyboard_report);
-}
-
-static int send_consumer_report_on_mode(enum kb_mode mode, uint16_t usage)
-{
-    struct hid_consumer_report report;
-    int err;
-
-    hid_consumer_report_press(&report, usage);
-    err = transport_send_consumer_report(mode, &report);
-    if (err != 0) {
-        return err;
-    }
-
-    hid_consumer_report_release(&report);
-    return transport_send_consumer_report(mode, &report);
 }
 
 void input_manager_release_all(void)
@@ -84,15 +69,23 @@ static void input_manager_event_cb(struct input_event *evt, void *user_data)
             return;
         }
 
-        LOG_INF("encoder press: mute");
+        struct app_config config;
+        uint8_t action = APP_ENCODER_ACTION_MUTE;
+        int err;
 
-        int err = send_consumer_report_on_mode(mode_manager_get_mode(), HID_CONSUMER_MUTE);
+        if (app_config_get(&config) == 0) {
+            action = config.encoder_press_action;
+        }
+
+        LOG_INF("encoder press action: %u", action);
+
+        err = encoder_action_trigger(action);
         if (err == -ENOTCONN) {
             LOG_WRN_RATELIMIT_RATE(TRANSPORT_NOT_READY_LOG_INTERVAL_MS,
-                "mute report deferred: mode %d transport is not ready",
+                "encoder press deferred: mode %d transport is not ready",
                 mode_manager_get_mode());
         } else if (err != 0) {
-            LOG_WRN("mute report send failed: %d", err);
+            LOG_WRN("encoder press action failed: %d", err);
         }
 
         return;
