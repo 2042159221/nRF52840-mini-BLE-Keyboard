@@ -3,8 +3,8 @@
 
 #include <config/app_config.h>
 #include <config/app_config_store.h>
+#include <hid/hid_flowctrl.h>
 #include <host/host_comm.h>
-#include <input/encoder_action.h>
 #include <input/encoder_manager.h>
 #include <input/input_manager.h>
 #include <mode/mode_manager.h>
@@ -44,9 +44,9 @@ int main(void)
                 LOG_WRN("host config channel init failed: %d", err);
         }
 
-        err = encoder_action_init();
+        err = hid_flowctrl_init();
         if (err != 0) {
-                LOG_ERR("encoder action init failed: %d", err);
+                LOG_ERR("HID flow control init failed: %d", err);
                 return 0;
         }
 

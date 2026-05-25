@@ -11,46 +11,29 @@
 #include <zephyr/logging/log.h>
 
 #include <config/app_config.h>
+#include <hid/hid_flowctrl.h>
 #include <hid/hid_report.h>
 #include <hid/hid_usage.h>
-#include <input/encoder_action.h>
 #include <input/input_manager.h>
 #include <keymap/keymap.h>
-#include <mode/mode_manager.h>
-#include <transport/transport.h>
 
 LOG_MODULE_REGISTER(input_manager, LOG_LEVEL_INF);
 
 #define KBD_MATRIX_NODE DT_NODELABEL(kbd_matrix)
-#define TRANSPORT_NOT_READY_LOG_INTERVAL_MS 3000
-
 static struct hid_keyboard_report keyboard_report;
 
 #if defined(CONFIG_INPUT)
-static int send_keyboard_report_on_mode(enum kb_mode mode);
-
-static int send_keyboard_report(void)
-{
-    return send_keyboard_report_on_mode(mode_manager_get_mode());
-}
-
-static int send_keyboard_report_on_mode(enum kb_mode mode)
-{
-    if (!transport_ready(mode)) {
-        LOG_DBG("transport for mode %d is not ready", mode);
-        return -ENOTCONN;
-    }
-
-    return transport_send_keyboard_report(mode, &keyboard_report);
-}
-
 void input_manager_release_all(void)
 {
     int err;
 
     hid_keyboard_report_clear(&keyboard_report);
 
-    err = send_keyboard_report();
+    err = hid_flowctrl_submit_keyboard_report(&keyboard_report);
+    if (err == 0) {
+        err = hid_flowctrl_flush_keyboard();
+    }
+
     if (err != 0 && err != -ENOTCONN) {
         LOG_WRN("keyboard release report failed: %d", err);
     }
@@ -79,11 +62,8 @@ static void input_manager_event_cb(struct input_event *evt, void *user_data)
 
         LOG_INF("encoder press action: %u", action);
 
-        err = encoder_action_submit(action);
-        if (err == -ENOMSG) {
-            LOG_WRN_RATELIMIT_RATE(TRANSPORT_NOT_READY_LOG_INTERVAL_MS,
-                "encoder press action queue full");
-        } else if (err != 0) {
+        err = hid_flowctrl_submit_encoder_action(action);
+        if (err != 0 && err != -ENOMSG && err != -ENOTCONN) {
             LOG_WRN("encoder press action submit failed: %d", err);
         }
 
@@ -110,12 +90,8 @@ static void input_manager_event_cb(struct input_event *evt, void *user_data)
         return;
     }
 
-    err = send_keyboard_report();
-    if (err == -ENOTCONN) {
-        LOG_WRN_RATELIMIT_RATE(TRANSPORT_NOT_READY_LOG_INTERVAL_MS,
-            "keyboard report deferred: mode %d transport is not ready",
-            mode_manager_get_mode());
-    } else if (err != 0) {
+    err = hid_flowctrl_submit_keyboard_report(&keyboard_report);
+    if (err != 0) {
         LOG_WRN("keyboard report send failed: %d", err);
     }
 }

@@ -15,6 +15,7 @@ int transport_init(void);
 int transport_enable(enum kb_mode mode);
 int transport_disable(enum kb_mode mode);
 bool transport_ready(enum kb_mode mode);
+bool transport_keyboard_ready(enum kb_mode mode);
 bool transport_consumer_ready(enum kb_mode mode);
 int transport_send_keyboard_report(enum kb_mode mode, const struct hid_keyboard_report *report);
 int transport_send_consumer_report(enum kb_mode mode, const struct hid_consumer_report *report);

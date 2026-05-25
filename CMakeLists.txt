@@ -23,6 +23,7 @@ target_sources(app PRIVATE
 	src/host/host_comm.c
 	src/main.c
 	src/hid/hid_consumer.c
+	src/hid/hid_flowctrl.c
 	src/hid/hid_report.c
 	src/input/encoder_action.c
 	src/input/encoder_manager.c

@@ -74,7 +74,7 @@ int transport_disable(enum kb_mode mode)
     }
 }
 
-bool transport_ready(enum kb_mode mode)
+bool transport_keyboard_ready(enum kb_mode mode)
 {
     switch (mode) {
     case KB_MODE_USB:
@@ -86,6 +86,11 @@ bool transport_ready(enum kb_mode mode)
     default:
         return false;
     }
+}
+
+bool transport_ready(enum kb_mode mode)
+{
+    return transport_keyboard_ready(mode);
 }
 
 bool transport_consumer_ready(enum kb_mode mode)

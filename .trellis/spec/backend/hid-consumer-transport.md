@@ -19,9 +19,14 @@
 - `void hid_consumer_report_press(struct hid_consumer_report *report, uint16_t usage)`
 - `void hid_consumer_report_release(struct hid_consumer_report *report)`
 - `int transport_send_consumer_report(enum kb_mode mode, const struct hid_consumer_report *report)`
+- `bool transport_keyboard_ready(enum kb_mode mode)`
 - `bool transport_consumer_ready(enum kb_mode mode)`
-- `int encoder_action_init(void)`
-- `int encoder_action_submit(uint8_t action)`
+- `int hid_flowctrl_init(void)`
+- `int hid_flowctrl_submit_keyboard_report(const struct hid_keyboard_report *report)`
+- `int hid_flowctrl_flush_keyboard(void)`
+- `int hid_flowctrl_submit_encoder_action(uint8_t action)`
+- `int hid_flowctrl_submit_encoder_delta(int32_t delta)`
+- `int encoder_action_trigger(uint8_t action)`
 - `int transport_usb_send_consumer_report(const struct hid_consumer_report *report)`
 - `int transport_ble_send_consumer_report(const struct hid_consumer_report *report)`
 - `int transport_24g_send_consumer_report(const struct hid_consumer_report *report)`
@@ -58,16 +63,32 @@ return bt_hids_inp_rep_send(&hids_obj, ble_conn, INPUT_REP_CONSUMER_IDX,
   require connection, security, report mode, and the Consumer input report CCCD
   subscription. Do not gate Consumer reports with `transport_ready()`, because
   that API currently means keyboard-report readiness.
+- `transport_keyboard_ready()` is the explicit keyboard report readiness API.
+  `transport_ready()` may remain as a compatibility alias, but new keyboard
+  send code should call the explicit API.
+- `hid_flowctrl` owns non-blocking input-side HID flow control:
+  - Keyboard reports use a latest-report overwrite slot. Multiple updates before
+    the work item runs send only the newest report.
+  - EC11 push actions use a small bounded FIFO submitted through
+    `hid_flowctrl_submit_encoder_action()`.
+  - Encoder rotation submits signed deltas through
+    `hid_flowctrl_submit_encoder_delta()` and must not enqueue one action per
+    pulse.
+  - The Consumer worker runs every 20-30 ms and attempts at most two Consumer
+    actions or encoder pulses per pass.
+  - If the active Consumer transport is not ready, BLE encoder deltas are
+    dropped before entering the pending delta accumulator or FIFO.
 - Zephyr input callbacks must not send Consumer HID reports directly. Encoder
-  rotation and EC11 push actions must call `encoder_action_submit()` so the
-  actual press/release pulse runs in the dedicated `encoder_action` thread.
-- `encoder_action_init()` starts the worker during boot. `encoder_action_submit()`
-  uses `k_msgq_put(..., K_NO_WAIT)` and must never block the input callback. If
-  the queue is full it returns `-ENOMSG`; callers should log a rate-limited
-  warning and drop the excess action.
-- If the Consumer transport is not ready, the worker skips that action and logs
-  a rate-limited warning. It does not retry the skipped action, because queued
-  stale knob detents would surprise the host after reconnect.
+  rotation and EC11 push actions must call `hid_flowctrl` submit functions.
+- If the Consumer action FIFO is full, `hid_flowctrl_submit_encoder_action()`
+  returns `-ENOMSG` and drops the new action. It must not assert or block the
+  input callback.
+- If the Consumer transport is not ready, `hid_flowctrl` drops that action or
+  delta and logs a rate-limited warning. It does not retry skipped Consumer
+  input, because queued stale knob detents would surprise the host after
+  reconnect.
+- `encoder_action_trigger()` remains a pure executor for action-to-pulse and
+  RGB-mode behavior. It must not own input callback queueing.
 - BLE boot protocol does not carry Consumer Control reports; return `-ENOTSUP`
   from the BLE Consumer send path while in boot mode.
 - The reserved 2.4G transport must return `-ENOTSUP` for Consumer reports until
@@ -79,8 +100,13 @@ return bt_hids_inp_rep_send(&hids_obj, ble_conn, INPUT_REP_CONSUMER_IDX,
 - USB transport disabled or HID interface not ready -> return `-ENOTCONN`.
 - BLE disconnected, not encrypted to `BT_SECURITY_L2`, or Consumer notifications
   not subscribed -> return `-ENOTCONN`.
-- `encoder_action_submit()` queue full in input callback -> return `-ENOMSG` and
-  drop the action without blocking Zephyr's input/sysworkqueue path.
+- `hid_flowctrl_submit_encoder_action()` FIFO full in input callback -> return
+  `-ENOMSG` and drop the action without blocking Zephyr's input/sysworkqueue
+  path.
+- `hid_flowctrl_submit_encoder_delta()` with Consumer transport not ready ->
+  return `-ENOTCONN` and do not update pending delta.
+- Keyboard transport not ready during latest-report work -> return `-ENOTCONN`
+  and drop that latest report.
 - BLE boot mode Consumer send -> return `-ENOTSUP`.
 - 2.4G Consumer send before implementation -> return `-ENOTSUP`.
 - First half of a Consumer pulse fails -> do not send the release half; return
@@ -91,18 +117,21 @@ return bt_hids_inp_rep_send(&hids_obj, ble_conn, INPUT_REP_CONSUMER_IDX,
 - Good: encoder clockwise event logs `encoder cw`, sends Volume Up, then sends
   `0x0000` through the currently selected transport.
 - Good: matrix EC11 push maps to `INPUT_KEY_MUTE`; `input_manager.c` intercepts
-  the press and sends one Mute pulse, while release is ignored.
-- Good: input callback enqueues one action with `encoder_action_submit()` and
-  returns quickly; the worker thread performs `transport_consumer_ready()` and
-  sends the HID pulse.
+  the press and submits one configured action through
+  `hid_flowctrl_submit_encoder_action()`, while release is ignored.
+- Good: input callback submits one signed wheel delta with
+  `hid_flowctrl_submit_encoder_delta()` and returns quickly; the worker performs
+  `transport_consumer_ready()` and sends at most two pulses per 20-30 ms pass.
 - Base: USB and BLE descriptors both expose keyboard Report ID 1 and Consumer
   Report ID 2, but USB send buffers include the ID while BLE payloads do not.
 - Bad: using `transport_ready(mode)` before a Consumer send in BLE mode. Keyboard
   notifications may be subscribed while Consumer notifications are not, or vice
   versa.
-- Bad: calling `encoder_action_trigger()` from a Zephyr input callback. Slow or
-  disconnected transports can fill the input queue and produce `input: Event
-  dropped, queue full`.
+- Bad: calling `encoder_action_trigger()` or `transport_send_consumer_report()`
+  from a Zephyr input callback. Slow or disconnected transports can fill input
+  queues and produce `input: Event dropped, queue full`.
+- Bad: converting a wheel event value of `10` into ten queued Consumer actions.
+  Rotation must be represented as one accumulated pending delta.
 - Bad: sending only `0x00E9` without a following `0x0000`, which can leave the
   host seeing a held Consumer key or coalescing later events incorrectly.
 
@@ -113,6 +142,9 @@ return bt_hids_inp_rep_send(&hids_obj, ble_conn, INPUT_REP_CONSUMER_IDX,
   translation.
 - Unit-test Consumer action mapping and the `transport_consumer_ready()` guard
   so not-ready transports do not receive partial press/release reports.
+- Unit-test `hid_flowctrl` latest keyboard overwrite, Consumer FIFO full drop,
+  BLE not-ready encoder delta drop before accumulation, and max two encoder
+  pulses per worker pass.
 - Run `git diff --check` after descriptor or report-buffer edits.
 - Run a pristine Zephyr build after touching USB/BLE descriptors, board DTS,
   Kconfig, CMake, or transport signatures. Prefer:

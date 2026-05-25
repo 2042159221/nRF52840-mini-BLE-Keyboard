@@ -7,21 +7,17 @@
 #include <zephyr/input/input.h>
 #include <zephyr/logging/log.h>
 
-#include <config/app_config.h>
-#include <input/encoder_action.h>
+#include <hid/hid_flowctrl.h>
 #include <input/encoder_manager.h>
 
 LOG_MODULE_REGISTER(encoder_manager, LOG_LEVEL_INF);
 
 #define ENCODER_NODE DT_NODELABEL(ec11_encoder)
-#define TRANSPORT_NOT_READY_LOG_INTERVAL_MS 3000
 
 static void encoder_manager_event_cb(struct input_event *evt, void *user_data)
 {
-    struct app_config config;
-    uint8_t action = APP_ENCODER_ACTION_NONE;
     const char *event_name;
-    uint32_t pulses;
+    int err;
 
     ARG_UNUSED(user_data);
 
@@ -30,26 +26,13 @@ static void encoder_manager_event_cb(struct input_event *evt, void *user_data)
     }
 
     event_name = evt->value > 0 ? "encoder cw" : "encoder ccw";
-    pulses = evt->value > 0 ? (uint32_t)evt->value : (uint32_t)-evt->value;
 
     LOG_DBG("%s: %d", event_name, evt->value);
 
-    if (app_config_get(&config) == 0) {
-        action = evt->value > 0 ? config.encoder_cw_action :
-                 config.encoder_ccw_action;
-    }
-
-    while (pulses-- > 0U) {
-        int err = encoder_action_submit(action);
-
-        if (err == -ENOMSG) {
-            LOG_WRN_RATELIMIT_RATE(TRANSPORT_NOT_READY_LOG_INTERVAL_MS,
-                "%s action queue full", event_name);
-            break;
-        } else if (err != 0) {
-            LOG_WRN("%s action submit failed: %d", event_name, err);
-            break;
-        }
+    err = hid_flowctrl_submit_encoder_delta(evt->value);
+    if (err != 0 && err != -ENOTCONN) {
+        LOG_WRN_RATELIMIT(
+            "%s delta submit failed: %d", event_name, err);
     }
 }
 
