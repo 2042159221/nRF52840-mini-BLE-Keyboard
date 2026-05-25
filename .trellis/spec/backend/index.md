@@ -22,6 +22,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Embedded Power Guidelines](./embedded-power-guidelines.md) | Hardware-backed power, battery ADC, IP5306 contracts | Active |
 | [HID Consumer Transport Contracts](./hid-consumer-transport.md) | EC11 Consumer Control HID report, transport, and descriptor contracts | Active |
 | [RGB Lighting Contracts](./rgb-lighting.md) | WS2812 RGB hardware, effect, host LED, and power-policy contracts | Active |
+| [Host Configuration Protocol Contracts](./host-config-protocol.md) | Settings-backed app config, protobuf host protocol, and USB CDC ACM contracts | Active |
 
 ---
 

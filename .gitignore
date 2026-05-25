@@ -1,4 +1,5 @@
 build*/
+.tmp_nanopb/
 .firecrawl/
 .vscode/.history/
 .agents/
@@ -10,3 +11,5 @@ build*/
 *.log
 *.tmp
 *.bak
+__pycache__/
+*.py[cod]
