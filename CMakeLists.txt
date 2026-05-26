@@ -17,6 +17,7 @@ zephyr_nanopb_sources(app proto/device_comm.proto)
 target_sources(app PRIVATE
 	src/config/app_config.c
 	src/config/app_config_store.c
+	src/display/status_screen.c
 	src/host/host_frame.c
 	src/host/host_protocol.c
 	src/host/host_comm.c
@@ -49,4 +50,8 @@ target_sources(app PRIVATE
 	src/transport/transport_ble.c
 	src/transport/transport_ble_security.c
 	src/transport/transport_usb.c
+)
+
+target_sources_ifdef(CONFIG_LVGL app PRIVATE
+	src/display/status_screen_lvgl.c
 )
