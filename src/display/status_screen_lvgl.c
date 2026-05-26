@@ -10,31 +10,37 @@
 #define SETTINGS_ROW_COUNT 4U
 #define CONFIRM_ROW_COUNT 2U
 
-#define COLOR_BG lv_color_hex(0x111418)
-#define COLOR_SURFACE lv_color_hex(0x1b2026)
-#define COLOR_ELEVATED lv_color_hex(0x242a31)
+#define COLOR_BG lv_color_hex(0x0c1012)
+#define COLOR_SURFACE lv_color_hex(0x171c20)
+#define COLOR_ELEVATED lv_color_hex(0x222a30)
+#define COLOR_TRACK lv_color_hex(0x2d343c)
 #define COLOR_TEXT lv_color_hex(0xf4f7fa)
-#define COLOR_TEXT_MUTED lv_color_hex(0x9aa6b2)
-#define COLOR_DIVIDER lv_color_hex(0x303742)
-#define COLOR_ACCENT lv_color_hex(0x21c7d9)
-#define COLOR_GREEN lv_color_hex(0x42c77a)
-#define COLOR_AMBER lv_color_hex(0xf5a524)
-#define COLOR_RED lv_color_hex(0xff5a68)
+#define COLOR_TEXT_MUTED lv_color_hex(0x9ba7b1)
+#define COLOR_DIVIDER lv_color_hex(0x333c45)
+#define COLOR_ACCENT lv_color_hex(0x21d4d0)
+#define COLOR_ACCENT_DIM lv_color_hex(0x0f5f63)
+#define COLOR_GREEN lv_color_hex(0x58d27d)
+#define COLOR_AMBER lv_color_hex(0xffb547)
+#define COLOR_RED lv_color_hex(0xff5b63)
 
 struct home_widgets {
+	lv_obj_t *mode_pill;
 	lv_obj_t *mode_chip;
 	lv_obj_t *battery_label;
 	lv_obj_t *charging_dot;
 	lv_obj_t *title;
 	lv_obj_t *subtitle;
 	lv_obj_t *battery_bar;
+	lv_obj_t *power_status;
 	lv_obj_t *num_status;
 	lv_obj_t *rgb_status;
 	lv_obj_t *knob_status;
 	lv_obj_t *rgb_accent;
+	lv_obj_t *hint_label;
 };
 
 struct menu_row_widgets {
+	lv_obj_t *row_bg;
 	lv_obj_t *focus;
 	lv_obj_t *label;
 	lv_obj_t *value;
@@ -48,10 +54,15 @@ struct edit_widgets {
 	lv_obj_t *title;
 	lv_obj_t *value;
 	lv_obj_t *bar;
+	lv_obj_t *bar_track;
 	lv_obj_t *hint;
+	lv_obj_t *apply_label;
+	lv_obj_t *cancel_label;
 };
 
 struct confirm_widgets {
+	lv_obj_t *warning_band;
+	lv_obj_t *warning_text;
 	struct menu_row_widgets rows[CONFIRM_ROW_COUNT];
 };
 
@@ -90,17 +101,22 @@ static lv_color_t mode_color(enum kb_mode mode)
 	}
 }
 
-static const char *rgb_mode_text(uint8_t mode, bool enabled)
+static const char *rgb_state_text(uint8_t mode, bool enabled)
 {
 	if (!enabled || mode == APP_RGB_MODE_OFF) {
-		return "RGB Off";
+		return "Off";
 	}
 
 	if (mode == APP_RGB_MODE_STATIC) {
-		return "RGB Static";
+		return "Static";
 	}
 
-	return "RGB Reactive";
+	return "Reactive";
+}
+
+static const char *power_source_text(const struct status_screen_snapshot *snapshot)
+{
+	return snapshot->power.usb_present ? "USB" : "BAT";
 }
 
 static const char *encoder_action_text(uint8_t action)
@@ -167,6 +183,17 @@ static lv_obj_t *make_box(lv_obj_t *parent, lv_coord_t x, lv_coord_t y,
 	return box;
 }
 
+static lv_obj_t *make_panel(lv_obj_t *parent, lv_coord_t x, lv_coord_t y,
+			    lv_coord_t w, lv_coord_t h)
+{
+	lv_obj_t *panel = make_box(parent, x, y, w, h, COLOR_SURFACE);
+
+	lv_obj_set_style_border_width(panel, 1, LV_PART_MAIN);
+	lv_obj_set_style_border_color(panel, COLOR_DIVIDER, LV_PART_MAIN);
+	lv_obj_set_style_radius(panel, 4, LV_PART_MAIN);
+	return panel;
+}
+
 static lv_obj_t *make_dot(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, lv_color_t color)
 {
 	lv_obj_t *dot = make_box(parent, x, y, 7, 7, color);
@@ -175,35 +202,60 @@ static lv_obj_t *make_dot(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, lv_color
 	return dot;
 }
 
+static void make_scanline(lv_obj_t *parent, lv_coord_t y, lv_opa_t opa)
+{
+	lv_obj_t *scan = make_box(parent, 10, y, 300, 1, COLOR_DIVIDER);
+
+	lv_obj_set_style_bg_opa(scan, opa, LV_PART_MAIN);
+}
+
 static void build_home(lv_obj_t *parent)
 {
-	lv_obj_t *scan;
 	lv_obj_t *bar_bg;
+	lv_obj_t *power_panel;
+	lv_obj_t *rgb_panel;
+	lv_obj_t *num_panel;
 
 	make_box(parent, 0, 0, 4, STATUS_SCREEN_H, COLOR_ACCENT);
-	scan = make_box(parent, 8, 29, 304, 1, COLOR_DIVIDER);
-	lv_obj_set_style_bg_opa(scan, LV_OPA_70, LV_PART_MAIN);
-	make_box(parent, 8, 132, 304, 1, COLOR_DIVIDER);
+	make_scanline(parent, 30, LV_OPA_70);
+	make_scanline(parent, 133, LV_OPA_50);
+	make_box(parent, 6, 4, 1, 160, COLOR_ACCENT_DIM);
 
-	home.mode_chip = make_label(parent, "USB", COLOR_TEXT, 14, 8, 42);
-	make_label(parent, "Signal Neon", COLOR_TEXT_MUTED, 59, 8, 96);
-	home.battery_label = make_label(parent, "100%", COLOR_TEXT_MUTED, 262, 8, 44);
-	home.charging_dot = make_dot(parent, 248, 13, COLOR_GREEN);
+	home.mode_pill = make_box(parent, 14, 7, 46, 18, COLOR_ELEVATED);
+	lv_obj_set_style_radius(home.mode_pill, 4, LV_PART_MAIN);
+	lv_obj_set_style_border_width(home.mode_pill, 1, LV_PART_MAIN);
+	lv_obj_set_style_border_color(home.mode_pill, COLOR_ACCENT, LV_PART_MAIN);
+	home.mode_chip = make_label(home.mode_pill, "USB", COLOR_TEXT, 7, 2, 32);
+	make_label(parent, "SIGNAL NEON", COLOR_TEXT_MUTED, 68, 9, 108);
+	home.battery_label = make_label(parent, "100%", COLOR_TEXT_MUTED, 264, 8, 40);
+	home.charging_dot = make_dot(parent, 250, 13, COLOR_GREEN);
 
-	home.title = make_label(parent, "USB Ready", COLOR_TEXT, 14, 42, 196);
+	home.title = make_label(parent, "USB Ready", COLOR_TEXT, 16, 42, 194);
 	lv_obj_set_style_text_font(home.title, &lv_font_montserrat_14, LV_PART_MAIN);
-	home.subtitle = make_label(parent, "Keyboard status", COLOR_TEXT_MUTED, 16, 68, 202);
+	home.subtitle = make_label(parent, "Keyboard status", COLOR_TEXT_MUTED, 17, 66, 190);
 
-	bar_bg = make_box(parent, 230, 46, 70, 8, COLOR_ELEVATED);
+	bar_bg = make_box(parent, 228, 43, 74, 10, COLOR_TRACK);
+	lv_obj_set_style_radius(bar_bg, 5, LV_PART_MAIN);
 	home.battery_bar = make_box(bar_bg, 0, 0, 70, 8, COLOR_GREEN);
-	home.rgb_accent = make_box(parent, 230, 65, 70, 6, COLOR_ACCENT);
+	lv_obj_set_pos(home.battery_bar, 2, 1);
+	lv_obj_set_style_radius(home.battery_bar, 4, LV_PART_MAIN);
+	make_label(parent, "Battery", COLOR_TEXT_MUTED, 228, 59, 82);
+	home.rgb_accent = make_box(parent, 228, 78, 74, 6, COLOR_ACCENT);
+	lv_obj_set_style_radius(home.rgb_accent, 3, LV_PART_MAIN);
 
-	home.num_status = make_label(parent, "NUM Host", COLOR_TEXT, 16, 92, 86);
-	home.rgb_status = make_label(parent, "RGB Reactive", COLOR_TEXT, 111, 92, 96);
+	power_panel = make_panel(parent, 14, 91, 88, 29);
+	num_panel = make_panel(parent, 110, 91, 82, 29);
+	rgb_panel = make_panel(parent, 200, 91, 104, 29);
+	make_label(power_panel, "PWR", COLOR_TEXT_MUTED, 7, 2, 32);
+	make_label(num_panel, "NUM", COLOR_TEXT_MUTED, 7, 2, 32);
+	make_label(rgb_panel, "RGB", COLOR_TEXT_MUTED, 7, 2, 32);
+	home.power_status = make_label(power_panel, "USB", COLOR_TEXT, 39, 11, 38);
+	home.num_status = make_label(num_panel, "Host", COLOR_TEXT, 39, 11, 34);
+	home.rgb_status = make_label(rgb_panel, "Reactive", COLOR_TEXT, 39, 11, 58);
+
 	home.knob_status = make_label(parent, "Knob Vol-/Vol+/Mute", COLOR_TEXT_MUTED,
-				      16, 112, 220);
-
-	make_label(parent, "Hold Settings", COLOR_ACCENT, 186, 145, 116);
+				      16, 142, 184);
+	home.hint_label = make_label(parent, "Hold: Settings", COLOR_ACCENT, 210, 142, 96);
 }
 
 static lv_obj_t *build_template_page(lv_obj_t *parent, const char *title)
@@ -212,9 +264,10 @@ static lv_obj_t *build_template_page(lv_obj_t *parent, const char *title)
 
 	lv_obj_add_flag(page, LV_OBJ_FLAG_HIDDEN);
 	make_box(page, 0, 0, 4, STATUS_SCREEN_H, COLOR_ACCENT);
+	make_box(page, 6, 4, 1, 160, COLOR_ACCENT_DIM);
 	make_label(page, title, COLOR_TEXT, 14, 8, 160);
 	make_label(page, "Exit", COLOR_ACCENT, 264, 8, 40);
-	make_box(page, 8, 29, 304, 1, COLOR_DIVIDER);
+	make_scanline(page, 29, LV_OPA_70);
 	return page;
 }
 
@@ -223,13 +276,20 @@ static void create_menu_row(lv_obj_t *page, uint8_t row, const char *label,
 {
 	lv_coord_t y = 42 + (row * 24);
 
-	widgets->focus = make_box(page, 12, y - 2, 4, 18, COLOR_DIVIDER);
-	widgets->label = make_label(page, label, COLOR_TEXT_MUTED, 24, y, 110);
-	widgets->value = make_label(page, value, COLOR_TEXT_MUTED, 146, y, 144);
+	widgets->row_bg = make_box(page, 12, y - 4, 292, 22, COLOR_BG);
+	lv_obj_set_style_border_width(widgets->row_bg, 1, LV_PART_MAIN);
+	lv_obj_set_style_border_color(widgets->row_bg, COLOR_BG, LV_PART_MAIN);
+	widgets->focus = make_box(widgets->row_bg, 0, 2, 4, 18, COLOR_DIVIDER);
+	widgets->label = make_label(widgets->row_bg, label, COLOR_TEXT_MUTED, 14, 3, 104);
+	widgets->value = make_label(widgets->row_bg, value, COLOR_TEXT_MUTED, 134, 3, 140);
 }
 
 static void update_menu_row(struct menu_row_widgets *widgets, const char *value, bool focused)
 {
+	lv_obj_set_style_bg_color(widgets->row_bg, focused ? COLOR_ELEVATED : COLOR_BG,
+				  LV_PART_MAIN);
+	lv_obj_set_style_border_color(widgets->row_bg, focused ? COLOR_ACCENT_DIM : COLOR_BG,
+				      LV_PART_MAIN);
 	lv_obj_set_style_bg_color(widgets->focus, focused ? COLOR_ACCENT : COLOR_DIVIDER,
 				  LV_PART_MAIN);
 	lv_obj_set_style_bg_opa(widgets->focus, focused ? LV_OPA_COVER : LV_OPA_50,
@@ -252,23 +312,31 @@ static void build_settings_template(lv_obj_t *parent)
 
 static void build_edit_template(lv_obj_t *parent)
 {
-	lv_obj_t *bar_bg;
+	lv_obj_t *panel;
 
 	edit_page = build_template_page(parent, "Edit");
-	edit.title = make_label(edit_page, "RGB Brightness", COLOR_TEXT, 18, 46, 160);
-	edit.value = make_label(edit_page, "50%", COLOR_ACCENT, 224, 46, 58);
+	panel = make_panel(edit_page, 16, 44, 288, 80);
+	edit.title = make_label(panel, "RGB Brightness", COLOR_TEXT, 12, 8, 142);
+	edit.value = make_label(panel, "50%", COLOR_ACCENT, 224, 8, 44);
 	edit.hint = make_label(edit_page, "Rotate adjust, press apply", COLOR_TEXT_MUTED,
-			       18, 70, 230);
-	bar_bg = make_box(edit_page, 20, 103, 196, 10, COLOR_ELEVATED);
-	edit.bar = make_box(bar_bg, 0, 0, 98, 10, COLOR_GREEN);
-	make_label(edit_page, "Cancel", COLOR_ACCENT, 230, 99, 62);
+			       20, 132, 184);
+	edit.bar_track = make_box(panel, 12, 46, 218, 12, COLOR_TRACK);
+	lv_obj_set_style_radius(edit.bar_track, 6, LV_PART_MAIN);
+	edit.bar = make_box(edit.bar_track, 1, 1, 108, 10, COLOR_GREEN);
+	lv_obj_set_style_radius(edit.bar, 5, LV_PART_MAIN);
+	edit.apply_label = make_label(edit_page, "Press: Apply", COLOR_GREEN, 210, 132, 92);
+	edit.cancel_label = make_label(edit_page, "Hold: Cancel", COLOR_ACCENT, 210, 149, 92);
 }
 
 static void build_confirm_template(lv_obj_t *parent)
 {
 	confirm_page = build_template_page(parent, "Confirm");
-	make_label(confirm_page, "Factory Reset", COLOR_RED, 18, 50, 160);
-	make_label(confirm_page, "Resets saved local config.", COLOR_TEXT_MUTED, 18, 76, 236);
+	confirm.warning_band = make_panel(confirm_page, 16, 44, 288, 42);
+	lv_obj_set_style_border_color(confirm.warning_band, COLOR_RED, LV_PART_MAIN);
+	confirm.warning_text = make_label(confirm.warning_band, "Factory Reset", COLOR_RED, 12, 6,
+					  156);
+	make_label(confirm.warning_band, "Saved local config will be reset.", COLOR_TEXT_MUTED,
+		   12, 24, 242);
 	create_menu_row(confirm_page, 2, "Cancel", "Selected", &confirm.rows[0]);
 	create_menu_row(confirm_page, 3, "Confirm", "Reset", &confirm.rows[1]);
 }
@@ -319,7 +387,7 @@ static void update_edit_page(const struct status_screen_snapshot *snapshot)
 	(void)snprintf(value, sizeof(value), "%d%%", brightness);
 	lv_label_set_text(edit.value, value);
 	lv_label_set_text(edit.hint, "Press apply, hold cancel");
-	bar_width = (lv_coord_t)((196 * brightness) / 100);
+	bar_width = (lv_coord_t)((216 * brightness) / 100);
 	if (bar_width < 3) {
 		bar_width = 3;
 	}
@@ -336,6 +404,18 @@ static void update_confirm_page(const struct status_screen_snapshot *snapshot)
 			!confirm_selected);
 	update_menu_row(&confirm.rows[1], confirm_selected ? "Selected" : "Reset",
 			confirm_selected);
+	lv_obj_set_style_border_color(confirm.warning_band,
+				      confirm_selected ? COLOR_RED : COLOR_DIVIDER,
+				      LV_PART_MAIN);
+	lv_obj_set_style_text_color(confirm.warning_text,
+				    confirm_selected ? COLOR_RED : COLOR_AMBER,
+				    LV_PART_MAIN);
+	lv_obj_set_style_text_color(confirm.rows[1].label,
+				    confirm_selected ? COLOR_RED : COLOR_TEXT_MUTED,
+				    LV_PART_MAIN);
+	lv_obj_set_style_text_color(confirm.rows[1].value,
+				    confirm_selected ? COLOR_RED : COLOR_TEXT_MUTED,
+				    LV_PART_MAIN);
 }
 
 int status_screen_lvgl_init(const struct status_screen_snapshot *snapshot)
@@ -391,9 +471,10 @@ void status_screen_lvgl_update(const struct status_screen_snapshot *snapshot)
 	lv_label_set_text(home.subtitle,
 			  snapshot->power.usb_present ? "USB power present" : "Battery power");
 	lv_label_set_text(home.battery_label, battery);
-	lv_label_set_text(home.num_status, snapshot->num_lock ? "NUM On" : "NUM Host");
+	lv_label_set_text(home.power_status, power_source_text(snapshot));
+	lv_label_set_text(home.num_status, snapshot->num_lock ? "On" : "Host");
 	lv_label_set_text(home.rgb_status,
-			  rgb_mode_text(snapshot->config.rgb_mode, snapshot->config.rgb_enable));
+			  rgb_state_text(snapshot->config.rgb_mode, snapshot->config.rgb_enable));
 	lv_label_set_text(home.knob_status, knob);
 
 	bar_width = (lv_coord_t)((70U * percent) / 100U);
