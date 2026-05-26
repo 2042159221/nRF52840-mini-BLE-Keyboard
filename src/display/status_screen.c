@@ -22,15 +22,22 @@ LOG_MODULE_REGISTER(status_screen, LOG_LEVEL_INF);
 
 static struct status_screen_snapshot status_snapshot;
 static struct status_screen_model status_model;
+static struct k_work status_init_work;
 static struct k_work status_refresh_work;
 static struct k_work status_action_work;
 static bool status_model_initialized;
 static bool status_screen_ready;
+static bool status_workq_started;
 
 K_MUTEX_DEFINE(status_snapshot_lock);
 K_MSGQ_DEFINE(status_action_msgq, sizeof(struct status_screen_event_result), 4, 4);
 
 #ifdef CONFIG_LVGL
+#define STATUS_SCREEN_WORKQ_STACK_SIZE 6144
+#define STATUS_SCREEN_WORKQ_PRIORITY K_PRIO_PREEMPT(8)
+
+K_THREAD_STACK_DEFINE(status_workq_stack, STATUS_SCREEN_WORKQ_STACK_SIZE);
+static struct k_work_q status_workq;
 static const struct device *const display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
 static struct k_work_delayable status_lvgl_timer_work;
 #endif
@@ -100,7 +107,9 @@ static void status_schedule_refresh(void)
 		return;
 	}
 
-	k_work_submit(&status_refresh_work);
+#ifdef CONFIG_LVGL
+	(void)k_work_submit_to_queue(&status_workq, &status_refresh_work);
+#endif
 }
 
 static void status_mode_listener(enum kb_mode mode, enum kb_mode previous_mode, bool initial,
@@ -199,8 +208,6 @@ static void status_refresh_work_handler(struct k_work *work)
 	lv_lock();
 	status_screen_lvgl_update(&snapshot);
 	lv_unlock();
-
-	(void)lv_timer_handler();
 #else
 	ARG_UNUSED(snapshot);
 #endif
@@ -301,7 +308,13 @@ static void status_queue_model_action(const struct status_screen_event_result *r
 		return;
 	}
 
+#ifdef CONFIG_LVGL
+	if (status_workq_started) {
+		(void)k_work_submit_to_queue(&status_workq, &status_action_work);
+	}
+#else
 	k_work_submit(&status_action_work);
+#endif
 }
 
 static bool status_screen_handle_model_input(enum status_screen_input input)
@@ -374,29 +387,21 @@ static void status_lvgl_timer_work_handler(struct k_work *work)
 
 	ARG_UNUSED(work);
 
-	wait_ms = lv_timer_handler();
-	(void)k_work_reschedule(&status_lvgl_timer_work,
-				 K_MSEC(lvgl_timer_delay(wait_ms)));
-}
-#endif
+	if (!status_screen_ready) {
+		return;
+	}
 
-int status_screen_init(void)
+	wait_ms = lv_timer_handler();
+	(void)k_work_reschedule_for_queue(&status_workq, &status_lvgl_timer_work,
+					   K_MSEC(lvgl_timer_delay(wait_ms)));
+}
+
+static void status_init_work_handler(struct k_work *work)
 {
-#ifndef CONFIG_LVGL
-	LOG_INF("status screen disabled: LVGL is not enabled");
-	return 0;
-#else
 	struct status_screen_snapshot snapshot;
 	int err;
 
-	if (!device_is_ready(display_dev)) {
-		return -ENODEV;
-	}
-
-	k_work_init(&status_refresh_work, status_refresh_work_handler);
-	k_work_init(&status_action_work, status_action_work_handler);
-	k_work_init_delayable(&status_lvgl_timer_work, status_lvgl_timer_work_handler);
-	status_load_initial_snapshot();
+	ARG_UNUSED(work);
 
 	k_mutex_lock(&status_snapshot_lock, K_FOREVER);
 	snapshot = status_snapshot;
@@ -406,7 +411,8 @@ int status_screen_init(void)
 	err = status_screen_lvgl_init(&snapshot);
 	lv_unlock();
 	if (err != 0) {
-		return err;
+		LOG_WRN("status screen LVGL init failed: %d", err);
+		return;
 	}
 
 	err = display_blanking_off(display_dev);
@@ -415,14 +421,47 @@ int status_screen_init(void)
 	}
 
 	status_screen_ready = true;
-	status_register_listeners();
 	status_schedule_refresh();
 
 #ifndef CONFIG_LV_Z_RUN_LVGL_ON_WORKQUEUE
-	(void)k_work_reschedule(&status_lvgl_timer_work, K_MSEC(10));
+	(void)k_work_reschedule_for_queue(&status_workq, &status_lvgl_timer_work, K_MSEC(10));
 #endif
 
 	LOG_INF("status screen initialized");
+}
+#endif
+
+int status_screen_init(void)
+{
+#ifndef CONFIG_LVGL
+	LOG_INF("status screen disabled: LVGL is not enabled");
+	return 0;
+#else
+	int err;
+
+	if (!device_is_ready(display_dev)) {
+		return -ENODEV;
+	}
+
+	if (!status_workq_started) {
+		k_work_queue_start(&status_workq, status_workq_stack,
+				   K_THREAD_STACK_SIZEOF(status_workq_stack),
+				   STATUS_SCREEN_WORKQ_PRIORITY, NULL);
+		status_workq_started = true;
+	}
+
+	k_work_init(&status_init_work, status_init_work_handler);
+	k_work_init(&status_refresh_work, status_refresh_work_handler);
+	k_work_init(&status_action_work, status_action_work_handler);
+	k_work_init_delayable(&status_lvgl_timer_work, status_lvgl_timer_work_handler);
+	status_load_initial_snapshot();
+	status_register_listeners();
+	err = k_work_submit_to_queue(&status_workq, &status_init_work);
+	if (err < 0) {
+		return err;
+	}
+
+	LOG_INF("status screen init queued");
 	return 0;
 #endif
 }
