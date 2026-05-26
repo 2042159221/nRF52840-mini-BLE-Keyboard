@@ -144,13 +144,8 @@ static int usb_set_report(const struct device *dev,
         return 0;
     }
 
-    if (id == USB_REPORT_ID_KEYBOARD) {
-        keyboard_led_state_update(buf[0]);
-    } else if (id == 0U && len == 1U) {
-        keyboard_led_state_update(buf[0]);
-    } else if (id == 0U && len >= 2U && buf[0] == USB_REPORT_ID_KEYBOARD) {
-        keyboard_led_state_update(buf[1]);
-    }
+    (void)keyboard_led_state_update_from_hid_output_report(
+        id, USB_REPORT_ID_KEYBOARD, buf, len);
 
     return 0;
 }

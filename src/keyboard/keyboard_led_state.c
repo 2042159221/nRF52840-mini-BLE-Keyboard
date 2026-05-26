@@ -53,6 +53,39 @@ void keyboard_led_state_update(uint8_t led_bits)
     }
 }
 
+bool keyboard_led_state_update_from_hid_output_report(uint8_t report_id,
+                              uint8_t keyboard_report_id,
+                              const uint8_t *buf,
+                              uint16_t len)
+{
+    uint8_t led_bits;
+
+    if (buf == NULL || len == 0U) {
+        return false;
+    }
+
+    if (report_id == keyboard_report_id) {
+        led_bits = (len >= 2U && buf[0] == keyboard_report_id) ? buf[1] :
+                                 buf[0];
+        keyboard_led_state_update(led_bits);
+        return true;
+    }
+
+    if (report_id == 0U) {
+        if (len >= 2U && buf[0] == keyboard_report_id) {
+            keyboard_led_state_update(buf[1]);
+            return true;
+        }
+
+        if (len == 1U) {
+            keyboard_led_state_update(buf[0]);
+            return true;
+        }
+    }
+
+    return false;
+}
+
 uint8_t keyboard_led_state_get(void)
 {
     uint8_t led_bits;

@@ -13,6 +13,10 @@ extern "C" {
 typedef void (*keyboard_led_state_listener_t)(uint8_t led_bits, void *user_data);
 
 void keyboard_led_state_update(uint8_t led_bits);
+bool keyboard_led_state_update_from_hid_output_report(uint8_t report_id,
+                              uint8_t keyboard_report_id,
+                              const uint8_t *buf,
+                              uint16_t len);
 uint8_t keyboard_led_state_get(void);
 bool keyboard_led_state_num_lock(void);
 int keyboard_led_state_subscribe(keyboard_led_state_listener_t listener,

@@ -26,6 +26,7 @@
 - `int rgb_hw_show(const struct rgb_color *pixels, size_t count)`
 - `int rgb_hw_off(void)`
 - `void keyboard_led_state_update(uint8_t led_bits)`
+- `bool keyboard_led_state_update_from_hid_output_report(uint8_t report_id, uint8_t keyboard_report_id, const uint8_t *buf, uint16_t len)`
 - `bool keyboard_led_state_num_lock(void)`
 
 ### 3. Contracts
@@ -51,8 +52,14 @@
     Num status still overrides index 0.
 - Host LED state:
   - Num LED is controlled by host keyboard LED Output Report bit 0 only.
-  - USB and BLE transport modules call only `keyboard_led_state_update()`;
-    they must not depend on RGB effect internals.
+  - USB and BLE transport modules must route HID Output Reports through
+    `keyboard_led_state_update_from_hid_output_report()` or the equivalent
+    `keyboard_led_state` boundary; they must not parse Num Lock inside RGB.
+  - USB device-next `set_report()` passes the report ID as the `id` argument
+    for control transfers, while interrupt OUT buffers may include the report
+    ID as `buf[0]`; keyboard LED parsing must accept both shapes so report ID
+    `1` is not mistaken for `KEYBOARD_LED_NUM_LOCK`.
+  - Transport code must not depend on RGB effect internals.
 - Power:
   - RGB consumes published `power_state_snapshot` data only.
   - LOW reduces brightness.
@@ -94,6 +101,8 @@
   static/off modes, Num overlay, and critical shutdown.
 - Host-test `keyboard_led_state_update()` for Num bit parsing, change-only
   notification, duplicate subscription, and invalid listener.
+- Host-test HID Output Report parsing for both payload-only buffers and
+  report-ID-prefixed buffers such as `{ keyboard_report_id, 0x00 }`.
 - Build the Zephyr firmware after DTS/Kconfig/CMake/transport edits using the
   repository script:
   `.\scripts\build.ps1 -Pristine -BuildDir "D:\b_rgb_rtt_usb" -Board "mini-keyboard/nrf52840" -Snippet "rtt-console"`.
