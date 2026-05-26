@@ -23,6 +23,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [HID Consumer Transport Contracts](./hid-consumer-transport.md) | EC11 Consumer Control HID report, transport, and descriptor contracts | Active |
 | [RGB Lighting Contracts](./rgb-lighting.md) | WS2812 RGB hardware, effect, host LED, and power-policy contracts | Active |
 | [Host Configuration Protocol Contracts](./host-config-protocol.md) | Settings-backed app config, protobuf host protocol, and USB CDC ACM contracts | Active |
+| [LVGL Status Screen Contracts](./display-lvgl-status-screen.md) | ST7789V/LVGL status screen, RGB coexistence, and EC11 local UI contracts | Active |
 
 ---
 
