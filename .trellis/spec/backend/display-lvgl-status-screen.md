@@ -52,6 +52,7 @@
   - `CONFIG_LVGL=y`
   - `CONFIG_LV_COLOR_DEPTH_16=y`
   - `CONFIG_LV_COLOR_16_SWAP=y`
+  - `CONFIG_LV_Z_MEM_POOL_SIZE=49152` for the current polished static UI
   - `CONFIG_PWM=y`
   - `CONFIG_LED_PWM=y`
   - RGB symbols must remain enabled: `CONFIG_LED_STRIP=y` and
@@ -61,6 +62,15 @@
 - `status_screen_init()` must not block keyboard boot. If LVGL is disabled it
   returns `0`; if display initialization fails, `main.c` logs a warning and
   continues other keyboard services.
+- Display/LVGL bring-up must be isolated from the main boot path and the system
+  workqueue. `status_screen_init()` should load/register state, start a
+  dedicated low-priority status-screen workqueue, log `status screen init
+  queued`, and return. LVGL object creation, `display_blanking_off()`, refresh,
+  storage actions, and manual `lv_timer_handler()` driving must run from that
+  dedicated queue after boot-critical input/HID/RGB/log paths can continue.
+- `lv_timer_handler()` must have a single owner. Do not call it from refresh
+  work and timer work at the same time; refresh work updates LVGL objects, and
+  the timer path drives LVGL scheduling.
 - LVGL code must only reference font symbols enabled by Kconfig. The default
   lightweight font in this project is `lv_font_montserrat_14`; using
   `lv_font_montserrat_20` requires enabling `CONFIG_LV_FONT_MONTSERRAT_20=y`.
@@ -111,6 +121,9 @@
   logs nonfatal warning and continues boot.
 - `status_screen_lvgl_init(NULL)` -> `-EINVAL`.
 - LVGL root screen unavailable -> `-ENODEV`.
+- LVGL init/display flush stalls after `status screen init queued` -> keyboard
+  input, HID, RGB, host config, and logs must already be running; the status
+  screen worker may fail or stall without taking down the rest of boot.
 - Missing power/mode/config snapshot -> render defaults and refresh when
   publisher callbacks arrive; do not read hardware directly from the view.
 - Status action queue full -> log a warning and drop the local storage action;
