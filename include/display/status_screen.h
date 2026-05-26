@@ -17,6 +17,7 @@ struct status_screen_snapshot {
 	enum kb_mode mode;
 	struct power_state_snapshot power;
 	struct app_config config;
+	struct status_screen_model ui;
 	bool num_lock;
 	const char *message;
 };
@@ -24,6 +25,9 @@ struct status_screen_snapshot {
 int status_screen_init(void);
 bool status_screen_input_route(struct status_screen_model *model, enum status_screen_input input,
 			       struct status_screen_event_result *result);
+bool status_screen_handle_encoder_delta(int32_t delta);
+bool status_screen_handle_encoder_press(void);
+bool status_screen_handle_encoder_long_press(void);
 
 #ifdef CONFIG_LVGL
 int status_screen_lvgl_init(const struct status_screen_snapshot *snapshot);

@@ -7,6 +7,7 @@
 #include <zephyr/input/input.h>
 #include <zephyr/logging/log.h>
 
+#include <display/status_screen.h>
 #include <hid/hid_flowctrl.h>
 #include <input/encoder_manager.h>
 
@@ -28,6 +29,10 @@ static void encoder_manager_event_cb(struct input_event *evt, void *user_data)
     event_name = evt->value > 0 ? "encoder cw" : "encoder ccw";
 
     LOG_DBG("%s: %d", event_name, evt->value);
+
+    if (status_screen_handle_encoder_delta(evt->value)) {
+        return;
+    }
 
     err = hid_flowctrl_submit_encoder_delta(evt->value);
     if (err != 0 && err != -ENOTCONN) {

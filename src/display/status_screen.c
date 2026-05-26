@@ -5,6 +5,7 @@
 #include <zephyr/logging/log.h>
 
 #include <config/app_config.h>
+#include <config/app_config_store.h>
 #include <display/status_screen.h>
 #include <keyboard/keyboard_led_state.h>
 #include <mode/mode_manager.h>
@@ -20,7 +21,9 @@
 LOG_MODULE_REGISTER(status_screen, LOG_LEVEL_INF);
 
 static struct status_screen_snapshot status_snapshot;
+static struct status_screen_model status_model;
 static struct k_work status_refresh_work;
+static bool status_model_initialized;
 static bool status_screen_ready;
 
 K_MUTEX_DEFINE(status_snapshot_lock);
@@ -47,12 +50,46 @@ static void status_snapshot_defaults(struct status_screen_snapshot *snapshot)
 {
 	memset(snapshot, 0, sizeof(*snapshot));
 	(void)app_config_get_defaults(&snapshot->config);
+	status_screen_model_init_with_brightness(&snapshot->ui, snapshot->config.rgb_brightness);
 	snapshot->mode = KB_MODE_24G_RESERVED;
 	snapshot->power.estimated_percent = 100;
 	snapshot->power.level_state = POWER_LEVEL_STATE_UNKNOWN;
 	snapshot->power.charging_state = POWER_CHARGING_STATE_UNKNOWN;
 	snapshot->power.valid_flags = POWER_STATE_VALID_PERCENT;
 	snapshot->message = mode_message(snapshot->mode);
+}
+
+static void status_model_init_from_config(const struct app_config *config)
+{
+	int brightness = 50;
+
+	if (config != NULL) {
+		brightness = config->rgb_brightness;
+	}
+
+	status_screen_model_init_with_brightness(&status_model, brightness);
+	status_model_initialized = true;
+}
+
+static void status_model_ensure_initialized(void)
+{
+	struct app_config config;
+
+	if (status_model_initialized) {
+		return;
+	}
+
+	if (app_config_get(&config) == 0) {
+		status_model_init_from_config(&config);
+	} else {
+		status_model_init_from_config(NULL);
+	}
+}
+
+static void status_snapshot_sync_ui_locked(void)
+{
+	status_model_ensure_initialized();
+	status_snapshot.ui = status_model;
 }
 
 static void status_schedule_refresh(void)
@@ -115,6 +152,9 @@ static void status_config_listener(const struct app_config *config, void *user_d
 
 	k_mutex_lock(&status_snapshot_lock, K_FOREVER);
 	status_snapshot.config = *config;
+	status_model_ensure_initialized();
+	status_screen_model_set_rgb_brightness(&status_model, config->rgb_brightness);
+	status_snapshot_sync_ui_locked();
 	k_mutex_unlock(&status_snapshot_lock);
 
 	status_schedule_refresh();
@@ -134,6 +174,8 @@ static void status_load_initial_snapshot(void)
 	if (app_config_get(&config) == 0) {
 		status_snapshot.config = config;
 	}
+	status_model_init_from_config(&status_snapshot.config);
+	status_snapshot_sync_ui_locked();
 	err = power_state_get_latest(&power);
 	if (err == 0) {
 		status_snapshot.power = power;
@@ -185,6 +227,96 @@ static void status_register_listeners(void)
 	if (err != 0) {
 		LOG_WRN("status screen config subscription failed: %d", err);
 	}
+}
+
+static void status_handle_model_action(const struct status_screen_event_result *result)
+{
+	struct app_config config;
+	int err;
+
+	if (result == NULL) {
+		return;
+	}
+
+	switch (result->action) {
+	case STATUS_SCREEN_ACTION_APPLY_RGB_BRIGHTNESS:
+		err = app_config_get(&config);
+		if (err != 0) {
+			LOG_WRN("status screen config read failed: %d", err);
+			return;
+		}
+
+		config.rgb_brightness = (uint8_t)result->value;
+		err = app_config_set(&config, true);
+		if (err != 0) {
+			LOG_WRN("status screen brightness apply failed: %d", err);
+			return;
+		}
+
+		err = app_config_store_save();
+		if (err != 0) {
+			LOG_WRN("status screen brightness save failed: %d", err);
+		}
+		return;
+	case STATUS_SCREEN_ACTION_FACTORY_RESET_CONFIRMED:
+		err = app_config_store_factory_reset();
+		if (err != 0) {
+			LOG_WRN("status screen factory reset failed: %d", err);
+		}
+		return;
+	default:
+		return;
+	}
+}
+
+static bool status_screen_handle_model_input(enum status_screen_input input)
+{
+	struct status_screen_event_result result;
+	bool refresh;
+
+	if (!status_screen_ready) {
+		return false;
+	}
+
+	k_mutex_lock(&status_snapshot_lock, K_FOREVER);
+	status_model_ensure_initialized();
+	result = status_screen_model_handle_input(&status_model, input);
+	status_snapshot_sync_ui_locked();
+	refresh = result.consumed ||
+		  (result.action != STATUS_SCREEN_ACTION_NONE &&
+		   result.action != STATUS_SCREEN_ACTION_HID_PASSTHROUGH);
+	k_mutex_unlock(&status_snapshot_lock);
+
+	status_handle_model_action(&result);
+
+	if (refresh) {
+		status_schedule_refresh();
+	}
+
+	return result.consumed;
+}
+
+bool status_screen_handle_encoder_delta(int32_t delta)
+{
+	if (delta > 0) {
+		return status_screen_handle_model_input(STATUS_SCREEN_INPUT_ROTATE_CW);
+	}
+
+	if (delta < 0) {
+		return status_screen_handle_model_input(STATUS_SCREEN_INPUT_ROTATE_CCW);
+	}
+
+	return false;
+}
+
+bool status_screen_handle_encoder_press(void)
+{
+	return status_screen_handle_model_input(STATUS_SCREEN_INPUT_PRESS);
+}
+
+bool status_screen_handle_encoder_long_press(void)
+{
+	return status_screen_handle_model_input(STATUS_SCREEN_INPUT_LONG_PRESS);
 }
 
 #ifdef CONFIG_LVGL

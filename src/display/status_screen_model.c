@@ -50,7 +50,7 @@ static int clamp_brightness(int value)
 	return value;
 }
 
-void status_screen_model_init(struct status_screen_model *model)
+void status_screen_model_init_with_brightness(struct status_screen_model *model, int brightness)
 {
 	if (model == NULL) {
 		return;
@@ -58,9 +58,26 @@ void status_screen_model_init(struct status_screen_model *model)
 
 	model->page = STATUS_SCREEN_PAGE_HOME;
 	model->settings_focus = SETTINGS_ITEM_MODE;
-	model->rgb_brightness = 50;
-	model->edit_candidate = 50;
+	model->rgb_brightness = clamp_brightness(brightness);
+	model->edit_candidate = model->rgb_brightness;
 	model->confirm_selected = false;
+}
+
+void status_screen_model_init(struct status_screen_model *model)
+{
+	status_screen_model_init_with_brightness(model, 50);
+}
+
+void status_screen_model_set_rgb_brightness(struct status_screen_model *model, int brightness)
+{
+	if (model == NULL) {
+		return;
+	}
+
+	model->rgb_brightness = clamp_brightness(brightness);
+	if (model->page != STATUS_SCREEN_PAGE_EDIT) {
+		model->edit_candidate = model->rgb_brightness;
+	}
 }
 
 static struct status_screen_event_result handle_home(struct status_screen_model *model,
@@ -204,6 +221,15 @@ bool status_screen_model_ui_active(const struct status_screen_model *model)
 enum status_screen_page status_screen_model_current_page(const struct status_screen_model *model)
 {
 	return model == NULL ? STATUS_SCREEN_PAGE_HOME : model->page;
+}
+
+unsigned int status_screen_model_settings_focus(const struct status_screen_model *model)
+{
+	if (model == NULL || model->settings_focus >= SETTINGS_ITEM_COUNT) {
+		return 0U;
+	}
+
+	return model->settings_focus;
 }
 
 const char *status_screen_model_focused_label(const struct status_screen_model *model)

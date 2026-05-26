@@ -20,6 +20,15 @@ static void test_home_rotation_passes_through(void)
 	assert(status_screen_model_current_page(&model) == STATUS_SCREEN_PAGE_HOME);
 }
 
+static void test_initial_brightness_uses_config_value(void)
+{
+	struct status_screen_model model;
+
+	status_screen_model_init_with_brightness(&model, 80);
+
+	assert(status_screen_model_edit_value(&model) == 80);
+}
+
 static void test_long_press_enters_settings(void)
 {
 	struct status_screen_model model;
@@ -34,6 +43,21 @@ static void test_long_press_enters_settings(void)
 	assert(status_screen_model_ui_active(&model));
 	assert(status_screen_model_current_page(&model) == STATUS_SCREEN_PAGE_SETTINGS);
 	assert(status_screen_model_visible_exit(&model));
+}
+
+static void test_active_ui_consumes_rotation(void)
+{
+	struct status_screen_model model;
+	struct status_screen_event_result result;
+
+	status_screen_model_init(&model);
+	status_screen_model_handle_input(&model, STATUS_SCREEN_INPUT_LONG_PRESS);
+
+	result = status_screen_model_handle_input(&model, STATUS_SCREEN_INPUT_ROTATE_CW);
+
+	assert(result.consumed);
+	assert(result.action == STATUS_SCREEN_ACTION_NONE);
+	assert(status_screen_model_current_page(&model) == STATUS_SCREEN_PAGE_SETTINGS);
 }
 
 static void test_settings_focus_and_exit(void)
@@ -136,7 +160,9 @@ static void test_confirm_cancel_and_confirm(void)
 int main(void)
 {
 	test_home_rotation_passes_through();
+	test_initial_brightness_uses_config_value();
 	test_long_press_enters_settings();
+	test_active_ui_consumes_rotation();
 	test_settings_focus_and_exit();
 	test_edit_apply_produces_action();
 	test_edit_cancel_does_not_apply();

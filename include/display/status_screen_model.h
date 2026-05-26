@@ -47,10 +47,13 @@ struct status_screen_model {
 };
 
 void status_screen_model_init(struct status_screen_model *model);
+void status_screen_model_init_with_brightness(struct status_screen_model *model, int brightness);
+void status_screen_model_set_rgb_brightness(struct status_screen_model *model, int brightness);
 struct status_screen_event_result status_screen_model_handle_input(
 	struct status_screen_model *model, enum status_screen_input input);
 bool status_screen_model_ui_active(const struct status_screen_model *model);
 enum status_screen_page status_screen_model_current_page(const struct status_screen_model *model);
+unsigned int status_screen_model_settings_focus(const struct status_screen_model *model);
 const char *status_screen_model_focused_label(const struct status_screen_model *model);
 bool status_screen_model_visible_exit(const struct status_screen_model *model);
 const char *status_screen_model_edit_label(const struct status_screen_model *model);
