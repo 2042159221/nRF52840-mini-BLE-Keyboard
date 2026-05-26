@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 
 #include <lvgl.h>
@@ -167,7 +168,7 @@ static void build_home(lv_obj_t *parent)
 	home.charging_dot = make_dot(parent, 248, 13, COLOR_GREEN);
 
 	home.title = make_label(parent, "USB Ready", COLOR_TEXT, 14, 42, 196);
-	lv_obj_set_style_text_font(home.title, &lv_font_montserrat_20, LV_PART_MAIN);
+	lv_obj_set_style_text_font(home.title, &lv_font_montserrat_14, LV_PART_MAIN);
 	home.subtitle = make_label(parent, "Local status and settings", COLOR_TEXT_MUTED,
 				   16, 68, 202);
 
