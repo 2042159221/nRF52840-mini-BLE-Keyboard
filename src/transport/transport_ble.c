@@ -10,6 +10,7 @@
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/hci_types.h>
 #include <zephyr/bluetooth/uuid.h>
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/settings/settings.h>
 #include <zephyr/sys/byteorder.h>
@@ -50,6 +51,8 @@ static bool ble_consumer_report_notify_enabled;
 static bool ble_boot_report_notify_enabled;
 static int ble_advertising_restart_delay_ms =
     TRANSPORT_BLE_SECURITY_RECONNECT_DELAY_MS;
+static K_MUTEX_DEFINE(ble_state_lock);
+static K_MUTEX_DEFINE(ble_hids_api_lock);
 static struct k_work_delayable ble_advertising_restart_work;
 
 static const struct bt_data ad[] = {
@@ -88,39 +91,64 @@ static void advertising_start(void)
 
 static void ble_advertising_restart_work_handler(struct k_work *work)
 {
+    bool should_start;
+
     ARG_UNUSED(work);
 
-    if (ble_transport_enabled && ble_conn == NULL && !ble_transport_advertising) {
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
+    should_start = ble_transport_enabled && ble_conn == NULL &&
+               !ble_transport_advertising;
+    k_mutex_unlock(&ble_state_lock);
+
+    if (should_start) {
         advertising_start();
     }
 }
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
+    struct bt_conn *conn_ref = NULL;
+
     if (err != 0) {
         LOG_WRN("BLE connection failed: 0x%02x", err);
         return;
     }
 
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
     ble_transport_advertising = false;
     ble_conn = bt_conn_ref(conn);
+    if (ble_conn != NULL) {
+        conn_ref = bt_conn_ref(ble_conn);
+    }
     ble_in_boot_mode = false;
     ble_keyboard_report_notify_enabled = false;
     ble_consumer_report_notify_enabled = false;
     ble_boot_report_notify_enabled = false;
-    (void)bt_hids_connected(&hids_obj, conn);
+    k_mutex_unlock(&ble_state_lock);
 
-    if (bt_conn_set_security(ble_conn, BT_SECURITY_L2) != 0) {
+    k_mutex_lock(&ble_hids_api_lock, K_FOREVER);
+    (void)bt_hids_connected(&hids_obj, conn);
+    k_mutex_unlock(&ble_hids_api_lock);
+
+    if (conn_ref == NULL) {
+        LOG_WRN("BLE connection reference failed");
+        return;
+    }
+
+    if (bt_conn_set_security(conn_ref, BT_SECURITY_L2) != 0) {
         LOG_WRN("BLE security request failed");
     }
+    bt_conn_unref(conn_ref);
 
     LOG_INF("BLE connected");
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
-    (void)bt_hids_disconnected(&hids_obj, conn);
+    bool restart_advertising;
+    int restart_delay_ms;
 
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
     if (ble_conn != NULL) {
         bt_conn_unref(ble_conn);
         ble_conn = NULL;
@@ -129,24 +157,41 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
     ble_keyboard_report_notify_enabled = false;
     ble_consumer_report_notify_enabled = false;
     ble_boot_report_notify_enabled = false;
+    restart_advertising = ble_transport_enabled;
+    restart_delay_ms = ble_advertising_restart_delay_ms;
+    ble_advertising_restart_delay_ms =
+        transport_ble_security_reconnect_delay_ms(BT_SECURITY_ERR_SUCCESS);
+    k_mutex_unlock(&ble_state_lock);
+
+    k_mutex_lock(&ble_hids_api_lock, K_FOREVER);
+    (void)bt_hids_disconnected(&hids_obj, conn);
+    k_mutex_unlock(&ble_hids_api_lock);
 
     LOG_INF("BLE disconnected: 0x%02x", reason);
 
-    if (ble_transport_enabled) {
+    if (restart_advertising) {
         (void)k_work_reschedule(&ble_advertising_restart_work,
-                    K_MSEC(ble_advertising_restart_delay_ms));
-        ble_advertising_restart_delay_ms =
-            transport_ble_security_reconnect_delay_ms(BT_SECURITY_ERR_SUCCESS);
+                    K_MSEC(restart_delay_ms));
     }
 }
 
 static void security_changed(struct bt_conn *conn, bt_security_t level,
                  enum bt_security_err err)
 {
+    bool active_conn;
     int unpair_err;
     int disconnect_err;
 
-    if (conn != ble_conn) {
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
+    active_conn = (conn == ble_conn);
+    if (active_conn && err != BT_SECURITY_ERR_SUCCESS &&
+        transport_ble_security_error_requires_bond_reset(err)) {
+        ble_advertising_restart_delay_ms =
+            transport_ble_security_reconnect_delay_ms(err);
+    }
+    k_mutex_unlock(&ble_state_lock);
+
+    if (!active_conn) {
         return;
     }
 
@@ -155,8 +200,6 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
             bt_security_err_to_str(err), err);
 
         if (transport_ble_security_error_requires_bond_reset(err)) {
-            ble_advertising_restart_delay_ms =
-                transport_ble_security_reconnect_delay_ms(err);
             unpair_err = bt_unpair(BT_ID_DEFAULT, bt_conn_get_dst(conn));
             if (unpair_err != 0) {
                 LOG_WRN("BLE stale bond cleanup failed: %d", unpair_err);
@@ -234,6 +277,7 @@ static void hids_pm_evt_handler(enum bt_hids_pm_evt evt, struct bt_conn *conn)
 {
     ARG_UNUSED(conn);
 
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
     switch (evt) {
     case BT_HIDS_PM_EVT_BOOT_MODE_ENTERED:
         ble_in_boot_mode = true;
@@ -244,6 +288,7 @@ static void hids_pm_evt_handler(enum bt_hids_pm_evt evt, struct bt_conn *conn)
     default:
         break;
     }
+    k_mutex_unlock(&ble_state_lock);
 }
 
 static void hids_outp_rep_handler(struct bt_hids_rep *rep,
@@ -265,6 +310,7 @@ static void hids_input_notif_handler(uint8_t report_id, enum bt_hids_notify_evt 
 {
     const bool enabled = (evt == BT_HIDS_CCCD_EVT_NOTIFY_ENABLED);
 
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
     switch (report_id) {
     case INPUT_REP_KEYS_REF_ID:
         ble_keyboard_report_notify_enabled = enabled;
@@ -278,16 +324,19 @@ static void hids_input_notif_handler(uint8_t report_id, enum bt_hids_notify_evt 
         LOG_WRN("BLE HID notification event for unknown report id %u", report_id);
         break;
     }
+    k_mutex_unlock(&ble_state_lock);
 }
 
 static void hids_boot_notif_handler(enum bt_hids_notify_evt evt)
 {
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
     ble_boot_report_notify_enabled = (evt == BT_HIDS_CCCD_EVT_NOTIFY_ENABLED);
     LOG_INF("BLE HID boot notifications %s",
         ble_boot_report_notify_enabled ? "enabled" : "disabled");
+    k_mutex_unlock(&ble_state_lock);
 }
 
-static bool ble_conn_ready_for_report(void)
+static bool ble_conn_ready_for_report_locked(void)
 {
     if (!ble_transport_enabled || ble_conn == NULL) {
         return false;
@@ -300,9 +349,9 @@ static bool ble_conn_ready_for_report(void)
     return true;
 }
 
-static bool ble_conn_ready_for_keyboard_report(void)
+static bool ble_conn_ready_for_keyboard_report_locked(void)
 {
-    if (!ble_conn_ready_for_report()) {
+    if (!ble_conn_ready_for_report_locked()) {
         return false;
     }
 
@@ -310,9 +359,9 @@ static bool ble_conn_ready_for_keyboard_report(void)
                   ble_keyboard_report_notify_enabled;
 }
 
-static bool ble_conn_ready_for_consumer_report(void)
+static bool ble_conn_ready_for_consumer_report_locked(void)
 {
-    if (!ble_conn_ready_for_report() || ble_in_boot_mode) {
+    if (!ble_conn_ready_for_report_locked() || ble_in_boot_mode) {
         return false;
     }
 
@@ -423,13 +472,18 @@ int transport_ble_init(void)
 
 int transport_ble_enable(void)
 {
+    bool should_start;
+
     if (!ble_transport_initialized) {
         return -ENODEV;
     }
 
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
     ble_transport_enabled = true;
+    should_start = ble_conn == NULL && !ble_transport_advertising;
+    k_mutex_unlock(&ble_state_lock);
 
-    if (ble_conn == NULL && !ble_transport_advertising) {
+    if (should_start) {
         advertising_start();
     }
 
@@ -439,83 +493,145 @@ int transport_ble_enable(void)
 
 int transport_ble_disable(void)
 {
+    struct bt_conn *conn = NULL;
+    bool was_advertising;
     int err;
 
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
     ble_transport_enabled = false;
-    (void)k_work_cancel_delayable(&ble_advertising_restart_work);
-
-    if (ble_transport_advertising) {
-        err = bt_le_adv_stop();
-
-        if (err != 0 && err != -EALREADY) {
-            LOG_WRN("BLE advertising stop failed: %d", err);
-        }
-        ble_transport_advertising = false;
-    }
-
+    was_advertising = ble_transport_advertising;
     if (ble_conn != NULL) {
-        err = bt_conn_disconnect(ble_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-        if (err != 0) {
-            LOG_WRN("BLE disconnect on transport disable failed: %d", err);
-        } else {
-            LOG_INF("BLE disconnect requested for transport disable");
-        }
+        conn = bt_conn_ref(ble_conn);
     }
 
     ble_keyboard_report_notify_enabled = false;
     ble_consumer_report_notify_enabled = false;
     ble_boot_report_notify_enabled = false;
+    k_mutex_unlock(&ble_state_lock);
+
+    (void)k_work_cancel_delayable(&ble_advertising_restart_work);
+
+    if (was_advertising) {
+        err = bt_le_adv_stop();
+
+        if (err != 0 && err != -EALREADY) {
+            LOG_WRN("BLE advertising stop failed: %d", err);
+        }
+
+        k_mutex_lock(&ble_state_lock, K_FOREVER);
+        ble_transport_advertising = false;
+        k_mutex_unlock(&ble_state_lock);
+    }
+
+    if (conn != NULL) {
+        err = bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+        if (err != 0) {
+            LOG_WRN("BLE disconnect on transport disable failed: %d", err);
+        } else {
+            LOG_INF("BLE disconnect requested for transport disable");
+        }
+        bt_conn_unref(conn);
+    }
 
     return 0;
 }
 
 bool transport_ble_ready(void)
 {
-    return ble_conn_ready_for_keyboard_report();
+    bool ready;
+
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
+    ready = ble_conn_ready_for_keyboard_report_locked();
+    k_mutex_unlock(&ble_state_lock);
+
+    return ready;
 }
 
 bool transport_ble_consumer_ready(void)
 {
-    return ble_conn_ready_for_consumer_report();
+    bool ready;
+
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
+    ready = ble_conn_ready_for_consumer_report_locked();
+    k_mutex_unlock(&ble_state_lock);
+
+    return ready;
 }
 
 int transport_ble_send_keyboard_report(const struct hid_keyboard_report *report)
 {
+    struct bt_conn *conn;
+    bool boot_mode;
+    int err;
+
     if (report == NULL) {
         return -EINVAL;
     }
 
-    if (!transport_ble_ready()) {
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
+    if (!ble_conn_ready_for_keyboard_report_locked()) {
+        k_mutex_unlock(&ble_state_lock);
         return -ENOTCONN;
     }
 
-    if (ble_in_boot_mode) {
-        return bt_hids_boot_kb_inp_rep_send(&hids_obj, ble_conn,
+    conn = bt_conn_ref(ble_conn);
+    if (conn == NULL) {
+        k_mutex_unlock(&ble_state_lock);
+        return -ENOTCONN;
+    }
+    boot_mode = ble_in_boot_mode;
+    k_mutex_unlock(&ble_state_lock);
+
+    k_mutex_lock(&ble_hids_api_lock, K_FOREVER);
+    if (boot_mode) {
+        err = bt_hids_boot_kb_inp_rep_send(&hids_obj, conn,
                             (const uint8_t *)report, sizeof(*report), NULL);
+        k_mutex_unlock(&ble_hids_api_lock);
+        bt_conn_unref(conn);
+        return err;
     }
 
-    return bt_hids_inp_rep_send(&hids_obj, ble_conn, INPUT_REP_KEYS_IDX,
+    err = bt_hids_inp_rep_send(&hids_obj, conn, INPUT_REP_KEYS_IDX,
                     (const uint8_t *)report, sizeof(*report), NULL);
+    k_mutex_unlock(&ble_hids_api_lock);
+    bt_conn_unref(conn);
+    return err;
 }
 
 int transport_ble_send_consumer_report(const struct hid_consumer_report *report)
 {
+    struct bt_conn *conn;
     uint8_t consumer_report[INPUT_REPORT_CONSUMER_MAX_LEN];
+    int err;
 
     if (report == NULL) {
         return -EINVAL;
     }
 
+    k_mutex_lock(&ble_state_lock, K_FOREVER);
     if (ble_in_boot_mode) {
+        k_mutex_unlock(&ble_state_lock);
         return -ENOTSUP;
     }
 
-    if (!ble_conn_ready_for_consumer_report()) {
+    if (!ble_conn_ready_for_consumer_report_locked()) {
+        k_mutex_unlock(&ble_state_lock);
         return -ENOTCONN;
     }
 
+    conn = bt_conn_ref(ble_conn);
+    if (conn == NULL) {
+        k_mutex_unlock(&ble_state_lock);
+        return -ENOTCONN;
+    }
+    k_mutex_unlock(&ble_state_lock);
+
     sys_put_le16(report->usage, consumer_report);
 
-    return bt_hids_inp_rep_send(&hids_obj, ble_conn, INPUT_REP_CONSUMER_IDX,
+    k_mutex_lock(&ble_hids_api_lock, K_FOREVER);
+    err = bt_hids_inp_rep_send(&hids_obj, conn, INPUT_REP_CONSUMER_IDX,
                     consumer_report, sizeof(consumer_report), NULL);
+    k_mutex_unlock(&ble_hids_api_lock);
+    bt_conn_unref(conn);
+    return err;
 }
