@@ -16,10 +16,16 @@
 ### 2. Signatures
 
 - `int status_screen_init(void)`
+- `bool status_screen_handle_encoder_delta(int32_t delta)`
+- `bool status_screen_handle_encoder_press(void)`
+- `bool status_screen_handle_encoder_long_press(void)`
 - `bool status_screen_input_route(struct status_screen_model *model, enum status_screen_input input, struct status_screen_event_result *result)`
 - `void status_screen_model_init(struct status_screen_model *model)`
+- `void status_screen_model_init_with_brightness(struct status_screen_model *model, int brightness)`
+- `void status_screen_model_set_rgb_brightness(struct status_screen_model *model, int brightness)`
 - `struct status_screen_event_result status_screen_model_handle_input(struct status_screen_model *model, enum status_screen_input input)`
 - `bool status_screen_model_ui_active(const struct status_screen_model *model)`
+- `unsigned int status_screen_model_settings_focus(const struct status_screen_model *model)`
 - `int status_screen_lvgl_init(const struct status_screen_snapshot *snapshot)`
 - `void status_screen_lvgl_update(const struct status_screen_snapshot *snapshot)`
 
@@ -61,6 +67,30 @@
 - Local UI navigation has no Esc dependency. Every settings/edit/confirm level
   must expose a visible `Exit` path. Home rotation is HID passthrough; long
   press enters settings; active UI consumes EC11 navigation input.
+- `status_screen.c` owns the runtime model. It must initialize the model's RGB
+  brightness from `app_config.rgb_brightness` and mirror the current model into
+  `status_screen_snapshot.ui` before scheduling LVGL refresh.
+- EC11 input integration must call the status-screen runtime boundary before
+  HID submission:
+  - Home rotation returns `false`, so `hid_flowctrl_submit_encoder_delta()`
+    still receives volume deltas.
+  - Active settings/edit/confirm pages return `true`, so local navigation does
+    not leak as HID Consumer input.
+  - Short press selects/applies when UI is active; otherwise it falls through
+    to the configured encoder press HID action.
+  - Long press enters/exits the local UI and must not also trigger the short
+    press HID action on release.
+- Runtime actions that touch storage must not run synchronously from Zephyr
+  input callbacks. Queue `STATUS_SCREEN_ACTION_APPLY_RGB_BRIGHTNESS` and
+  `STATUS_SCREEN_ACTION_FACTORY_RESET_CONFIRMED` to status-screen work before
+  calling `app_config_set()`, `app_config_store_save()`, or
+  `app_config_store_factory_reset()`.
+- LVGL view code renders from `status_screen_snapshot` only. It uses
+  `snapshot.ui` for page visibility, settings focus, edit value, and confirm
+  selection; it must not call config/storage/input/HID APIs.
+- The local UI theme is neutral utility styling: near-black background,
+  charcoal surface, cyan focus/accent, green positive, amber warning, and gray
+  secondary text. Avoid purple or single-hue decorative palettes.
 
 ### 4. Validation & Error Matrix
 
@@ -70,6 +100,8 @@
 - LVGL root screen unavailable -> `-ENODEV`.
 - Missing power/mode/config snapshot -> render defaults and refresh when
   publisher callbacks arrive; do not read hardware directly from the view.
+- Status action queue full -> log a warning and drop the local storage action;
+  do not block or assert in the input path.
 - Referencing a disabled LVGL font symbol -> compile failure; either use
   `lv_font_montserrat_14` or enable the matching Kconfig symbol.
 - RGB moved off P0.20, chain length changed, or RGB disabled -> reject the
@@ -81,6 +113,11 @@
   under `mipi_dbi` using `spi3`, and `rgb_strip: ws2812@0` under `spi2`.
 - Good: status screen subscribes to mode, power, keyboard LED state, and
   app-config snapshots, then schedules a work item for LVGL refresh.
+- Good: RGB brightness apply updates the model immediately, queues a work item,
+  then the worker calls `app_config_set(&config, true)` and
+  `app_config_store_save()`.
+- Good: factory reset confirmation defaults to Cancel, requires rotation to
+  Confirm, and only then queues `app_config_store_factory_reset()`.
 - Good: the pure C model test covers Home passthrough, long-press entry,
   settings focus movement, visible Exit, edit apply/cancel, and factory reset
   confirm defaulting to Cancel.
@@ -91,12 +128,18 @@
   require Zephyr or display hardware.
 - Bad: drawing directly from power/RGB/transport callbacks instead of caching a
   snapshot and scheduling a refresh.
+- Bad: calling `app_config_store_save()` or
+  `app_config_store_factory_reset()` directly from the input callback or from a
+  short-press release path.
 
 ### 6. Tests Required
 
 - Host-test the pure C status model/input behavior with assertions for:
   - Home rotation returns HID passthrough and leaves UI inactive.
+  - Model initialization can use the runtime config brightness instead of a
+    hard-coded default.
   - Long press enters Settings and makes UI active.
+  - Active UI rotation/press is consumed before HID submission.
   - Settings rotation changes focus and visible `Exit` returns Home.
   - Edit page apply produces an action value; long press cancel does not apply.
   - Confirm page starts on Cancel and only produces factory reset after focus
@@ -152,3 +195,26 @@ mipi_dbi {
 	spi-dev = <&spi3>;
 };
 ```
+
+#### Wrong
+
+```c
+if (status_screen_handle_encoder_press()) {
+	return;
+}
+
+app_config_store_save();
+```
+
+#### Correct
+
+```c
+if (status_screen_handle_encoder_press()) {
+	return;
+}
+
+err = hid_flowctrl_submit_encoder_action(action);
+```
+
+The status-screen module queues storage actions to its own work item; the input
+callback only decides whether the local UI consumed the event.
