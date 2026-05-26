@@ -3,6 +3,7 @@
 
 #include <config/app_config.h>
 #include <config/app_config_store.h>
+#include <display/status_screen.h>
 #include <hid/hid_flowctrl.h>
 #include <host/host_comm.h>
 #include <input/encoder_manager.h>
@@ -71,6 +72,11 @@ int main(void)
         if (err != 0) {
                 LOG_ERR("mode manager init failed: %d", err);
                 return 0;
+        }
+
+        err = status_screen_init();
+        if (err != 0) {
+                LOG_WRN("status screen init failed: %d", err);
         }
 
         app_config_notify_all();
