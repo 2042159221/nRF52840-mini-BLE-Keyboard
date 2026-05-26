@@ -7,20 +7,19 @@
 
 #define STATUS_SCREEN_W 320
 #define STATUS_SCREEN_H 172
+#define SETTINGS_ROW_COUNT 4U
+#define CONFIRM_ROW_COUNT 2U
 
-#define COLOR_BG lv_color_hex(0x0b0f14)
-#define COLOR_SURFACE lv_color_hex(0x151b22)
-#define COLOR_ELEVATED lv_color_hex(0x202833)
-#define COLOR_TEXT lv_color_hex(0xf4f8fb)
-#define COLOR_TEXT_MUTED lv_color_hex(0x93a1af)
-#define COLOR_DIVIDER lv_color_hex(0x2b3642)
-#define COLOR_CYAN lv_color_hex(0x23e6d2)
-#define COLOR_MAGENTA lv_color_hex(0xff4fd8)
-#define COLOR_GREEN lv_color_hex(0x7cff6b)
-#define COLOR_AMBER lv_color_hex(0xf8ba4c)
+#define COLOR_BG lv_color_hex(0x111418)
+#define COLOR_SURFACE lv_color_hex(0x1b2026)
+#define COLOR_ELEVATED lv_color_hex(0x242a31)
+#define COLOR_TEXT lv_color_hex(0xf4f7fa)
+#define COLOR_TEXT_MUTED lv_color_hex(0x9aa6b2)
+#define COLOR_DIVIDER lv_color_hex(0x303742)
+#define COLOR_ACCENT lv_color_hex(0x21c7d9)
+#define COLOR_GREEN lv_color_hex(0x42c77a)
+#define COLOR_AMBER lv_color_hex(0xf5a524)
 #define COLOR_RED lv_color_hex(0xff5a68)
-#define COLOR_BLE lv_color_hex(0x4da3ff)
-#define COLOR_USB lv_color_hex(0xa78bfa)
 
 struct home_widgets {
 	lv_obj_t *mode_chip;
@@ -35,7 +34,31 @@ struct home_widgets {
 	lv_obj_t *rgb_accent;
 };
 
+struct menu_row_widgets {
+	lv_obj_t *focus;
+	lv_obj_t *label;
+	lv_obj_t *value;
+};
+
+struct settings_widgets {
+	struct menu_row_widgets rows[SETTINGS_ROW_COUNT];
+};
+
+struct edit_widgets {
+	lv_obj_t *title;
+	lv_obj_t *value;
+	lv_obj_t *bar;
+	lv_obj_t *hint;
+};
+
+struct confirm_widgets {
+	struct menu_row_widgets rows[CONFIRM_ROW_COUNT];
+};
+
 static struct home_widgets home;
+static struct settings_widgets settings;
+static struct edit_widgets edit;
+static struct confirm_widgets confirm;
 static lv_obj_t *root;
 static lv_obj_t *settings_page;
 static lv_obj_t *edit_page;
@@ -58,9 +81,9 @@ static lv_color_t mode_color(enum kb_mode mode)
 {
 	switch (mode) {
 	case KB_MODE_USB:
-		return COLOR_USB;
+		return COLOR_GREEN;
 	case KB_MODE_BLE:
-		return COLOR_BLE;
+		return COLOR_ACCENT;
 	case KB_MODE_24G_RESERVED:
 	default:
 		return COLOR_AMBER;
@@ -157,7 +180,7 @@ static void build_home(lv_obj_t *parent)
 	lv_obj_t *scan;
 	lv_obj_t *bar_bg;
 
-	make_box(parent, 0, 0, 4, STATUS_SCREEN_H, COLOR_CYAN);
+	make_box(parent, 0, 0, 4, STATUS_SCREEN_H, COLOR_ACCENT);
 	scan = make_box(parent, 8, 29, 304, 1, COLOR_DIVIDER);
 	lv_obj_set_style_bg_opa(scan, LV_OPA_70, LV_PART_MAIN);
 	make_box(parent, 8, 132, 304, 1, COLOR_DIVIDER);
@@ -169,19 +192,18 @@ static void build_home(lv_obj_t *parent)
 
 	home.title = make_label(parent, "USB Ready", COLOR_TEXT, 14, 42, 196);
 	lv_obj_set_style_text_font(home.title, &lv_font_montserrat_14, LV_PART_MAIN);
-	home.subtitle = make_label(parent, "Local status and settings", COLOR_TEXT_MUTED,
-				   16, 68, 202);
+	home.subtitle = make_label(parent, "Keyboard status", COLOR_TEXT_MUTED, 16, 68, 202);
 
 	bar_bg = make_box(parent, 230, 46, 70, 8, COLOR_ELEVATED);
 	home.battery_bar = make_box(bar_bg, 0, 0, 70, 8, COLOR_GREEN);
-	home.rgb_accent = make_box(parent, 230, 65, 70, 6, COLOR_MAGENTA);
+	home.rgb_accent = make_box(parent, 230, 65, 70, 6, COLOR_ACCENT);
 
 	home.num_status = make_label(parent, "NUM Host", COLOR_TEXT, 16, 92, 86);
 	home.rgb_status = make_label(parent, "RGB Reactive", COLOR_TEXT, 111, 92, 96);
 	home.knob_status = make_label(parent, "Knob Vol-/Vol+/Mute", COLOR_TEXT_MUTED,
 				      16, 112, 220);
 
-	make_label(parent, "Hold: Settings", COLOR_CYAN, 186, 145, 116);
+	make_label(parent, "Hold Settings", COLOR_ACCENT, 186, 145, 116);
 }
 
 static lv_obj_t *build_template_page(lv_obj_t *parent, const char *title)
@@ -189,56 +211,131 @@ static lv_obj_t *build_template_page(lv_obj_t *parent, const char *title)
 	lv_obj_t *page = make_box(parent, 0, 0, STATUS_SCREEN_W, STATUS_SCREEN_H, COLOR_BG);
 
 	lv_obj_add_flag(page, LV_OBJ_FLAG_HIDDEN);
-	make_box(page, 0, 0, 4, STATUS_SCREEN_H, COLOR_MAGENTA);
+	make_box(page, 0, 0, 4, STATUS_SCREEN_H, COLOR_ACCENT);
 	make_label(page, title, COLOR_TEXT, 14, 8, 160);
-	make_label(page, "Exit", COLOR_CYAN, 264, 8, 40);
+	make_label(page, "Exit", COLOR_ACCENT, 264, 8, 40);
 	make_box(page, 8, 29, 304, 1, COLOR_DIVIDER);
 	return page;
 }
 
-static void add_menu_row(lv_obj_t *page, uint8_t row, const char *label,
-			 const char *value, bool focused)
+static void create_menu_row(lv_obj_t *page, uint8_t row, const char *label,
+			    const char *value, struct menu_row_widgets *widgets)
 {
 	lv_coord_t y = 42 + (row * 24);
-	lv_obj_t *focus = make_box(page, 12, y - 2, 4, 18, focused ? COLOR_CYAN : COLOR_DIVIDER);
 
-	lv_obj_set_style_bg_opa(focus, focused ? LV_OPA_COVER : LV_OPA_50, LV_PART_MAIN);
-	make_label(page, label, focused ? COLOR_TEXT : COLOR_TEXT_MUTED, 24, y, 96);
-	make_label(page, value, focused ? COLOR_CYAN : COLOR_TEXT_MUTED, 146, y, 144);
+	widgets->focus = make_box(page, 12, y - 2, 4, 18, COLOR_DIVIDER);
+	widgets->label = make_label(page, label, COLOR_TEXT_MUTED, 24, y, 110);
+	widgets->value = make_label(page, value, COLOR_TEXT_MUTED, 146, y, 144);
+}
+
+static void update_menu_row(struct menu_row_widgets *widgets, const char *value, bool focused)
+{
+	lv_obj_set_style_bg_color(widgets->focus, focused ? COLOR_ACCENT : COLOR_DIVIDER,
+				  LV_PART_MAIN);
+	lv_obj_set_style_bg_opa(widgets->focus, focused ? LV_OPA_COVER : LV_OPA_50,
+				LV_PART_MAIN);
+	lv_obj_set_style_text_color(widgets->label, focused ? COLOR_TEXT : COLOR_TEXT_MUTED,
+				    LV_PART_MAIN);
+	lv_obj_set_style_text_color(widgets->value, focused ? COLOR_ACCENT : COLOR_TEXT_MUTED,
+				    LV_PART_MAIN);
+	lv_label_set_text(widgets->value, value);
 }
 
 static void build_settings_template(lv_obj_t *parent)
 {
 	settings_page = build_template_page(parent, "Settings");
-	add_menu_row(settings_page, 0, "Mode", "Follow Hardware", true);
-	add_menu_row(settings_page, 1, "RGB", "Brightness / Mode", false);
-	add_menu_row(settings_page, 2, "System", "Save / Reset", false);
-	add_menu_row(settings_page, 3, "Exit", "Back Home", false);
+	create_menu_row(settings_page, 0, "Mode", "Follow Hardware", &settings.rows[0]);
+	create_menu_row(settings_page, 1, "RGB", "Brightness", &settings.rows[1]);
+	create_menu_row(settings_page, 2, "System", "Factory Reset", &settings.rows[2]);
+	create_menu_row(settings_page, 3, "Exit", "Back Home", &settings.rows[3]);
 }
 
 static void build_edit_template(lv_obj_t *parent)
 {
 	lv_obj_t *bar_bg;
-	lv_obj_t *bar;
 
 	edit_page = build_template_page(parent, "Edit");
-	make_label(edit_page, "RGB Brightness", COLOR_TEXT, 18, 46, 160);
-	make_label(edit_page, "Rotate to adjust, press to apply", COLOR_TEXT_MUTED,
-		   18, 70, 230);
+	edit.title = make_label(edit_page, "RGB Brightness", COLOR_TEXT, 18, 46, 160);
+	edit.value = make_label(edit_page, "50%", COLOR_ACCENT, 224, 46, 58);
+	edit.hint = make_label(edit_page, "Rotate adjust, press apply", COLOR_TEXT_MUTED,
+			       18, 70, 230);
 	bar_bg = make_box(edit_page, 20, 103, 196, 10, COLOR_ELEVATED);
-	bar = make_box(bar_bg, 0, 0, 120, 10, COLOR_CYAN);
-	lv_obj_set_style_bg_color(bar, COLOR_GREEN, LV_PART_MAIN);
-	make_label(edit_page, "Exit", COLOR_CYAN, 230, 99, 52);
+	edit.bar = make_box(bar_bg, 0, 0, 98, 10, COLOR_GREEN);
+	make_label(edit_page, "Cancel", COLOR_ACCENT, 230, 99, 62);
 }
 
 static void build_confirm_template(lv_obj_t *parent)
 {
 	confirm_page = build_template_page(parent, "Confirm");
 	make_label(confirm_page, "Factory Reset", COLOR_RED, 18, 50, 160);
-	make_label(confirm_page, "Default focus stays on Cancel.", COLOR_TEXT_MUTED,
-		   18, 76, 236);
-	add_menu_row(confirm_page, 2, "Cancel", "Selected", true);
-	add_menu_row(confirm_page, 3, "Confirm", "Hold intent", false);
+	make_label(confirm_page, "Resets saved local config.", COLOR_TEXT_MUTED, 18, 76, 236);
+	create_menu_row(confirm_page, 2, "Cancel", "Selected", &confirm.rows[0]);
+	create_menu_row(confirm_page, 3, "Confirm", "Reset", &confirm.rows[1]);
+}
+
+static void set_visible(lv_obj_t *page, bool visible)
+{
+	if (visible) {
+		lv_obj_clear_flag(page, LV_OBJ_FLAG_HIDDEN);
+	} else {
+		lv_obj_add_flag(page, LV_OBJ_FLAG_HIDDEN);
+	}
+}
+
+static void update_visible_page(enum status_screen_page page)
+{
+	set_visible(settings_page, page == STATUS_SCREEN_PAGE_SETTINGS);
+	set_visible(edit_page, page == STATUS_SCREEN_PAGE_EDIT);
+	set_visible(confirm_page, page == STATUS_SCREEN_PAGE_CONFIRM);
+}
+
+static void update_settings_page(const struct status_screen_snapshot *snapshot)
+{
+	char rgb_value[32];
+	unsigned int focus = status_screen_model_settings_focus(&snapshot->ui);
+
+	(void)snprintf(rgb_value, sizeof(rgb_value), "%u%%",
+		       (unsigned int)snapshot->config.rgb_brightness);
+
+	update_menu_row(&settings.rows[0], "Follow Hardware", focus == 0U);
+	update_menu_row(&settings.rows[1], rgb_value, focus == 1U);
+	update_menu_row(&settings.rows[2], "Factory Reset", focus == 2U);
+	update_menu_row(&settings.rows[3], "Back Home", focus == 3U);
+}
+
+static void update_edit_page(const struct status_screen_snapshot *snapshot)
+{
+	char value[8];
+	int brightness = status_screen_model_edit_value(&snapshot->ui);
+	lv_coord_t bar_width;
+
+	if (brightness < 0) {
+		brightness = 0;
+	}
+	if (brightness > 100) {
+		brightness = 100;
+	}
+
+	(void)snprintf(value, sizeof(value), "%d%%", brightness);
+	lv_label_set_text(edit.value, value);
+	lv_label_set_text(edit.hint, "Press apply, hold cancel");
+	bar_width = (lv_coord_t)((196 * brightness) / 100);
+	if (bar_width < 3) {
+		bar_width = 3;
+	}
+	lv_obj_set_width(edit.bar, bar_width);
+	lv_obj_set_style_bg_color(edit.bar, brightness <= 20 ? COLOR_AMBER : COLOR_GREEN,
+				  LV_PART_MAIN);
+}
+
+static void update_confirm_page(const struct status_screen_snapshot *snapshot)
+{
+	bool confirm_selected = status_screen_model_confirm_selected(&snapshot->ui);
+
+	update_menu_row(&confirm.rows[0], confirm_selected ? "Safe" : "Selected",
+			!confirm_selected);
+	update_menu_row(&confirm.rows[1], confirm_selected ? "Selected" : "Reset",
+			confirm_selected);
 }
 
 int status_screen_lvgl_init(const struct status_screen_snapshot *snapshot)
@@ -313,6 +410,11 @@ void status_screen_lvgl_update(const struct status_screen_snapshot *snapshot)
 				  COLOR_GREEN : COLOR_DIVIDER,
 				  LV_PART_MAIN);
 	lv_obj_set_style_bg_color(home.rgb_accent,
-				  snapshot->config.rgb_enable ? COLOR_MAGENTA : COLOR_DIVIDER,
+				  snapshot->config.rgb_enable ? COLOR_ACCENT : COLOR_DIVIDER,
 				  LV_PART_MAIN);
+
+	update_visible_page(status_screen_model_current_page(&snapshot->ui));
+	update_settings_page(snapshot);
+	update_edit_page(snapshot);
+	update_confirm_page(snapshot);
 }
