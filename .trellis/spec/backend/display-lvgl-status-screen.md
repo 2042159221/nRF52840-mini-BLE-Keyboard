@@ -39,6 +39,9 @@
   - RESET P1.10 active low
   - 320 x 172 active area, `x-offset = <0>`, `y-offset = <34>`,
     `ready-time-ms = <120>`, `mipi-max-frequency = <32000000>`.
+  - The panel is mounted as a landscape status screen. Use ST7789V
+    `mdac = <0x60>` (`MX|MV`) so the controller scans the LVGL 320 x 172
+    canvas counterclockwise 90 degrees from the default portrait direction.
 - RGB remains enabled on a separate SPIM instance:
   - WS2812 MOSI P0.20
   - dummy SCK P1.04, because the netlist marks it unconnected
