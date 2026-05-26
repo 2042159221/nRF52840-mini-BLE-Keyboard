@@ -21,6 +21,8 @@ target_sources(app PRIVATE
 	src/host/host_protocol.c
 	src/host/host_comm.c
 	src/main.c
+	src/display/status_screen_input.c
+	src/display/status_screen_model.c
 	src/hid/hid_consumer.c
 	src/hid/hid_flowctrl.c
 	src/hid/hid_report.c
