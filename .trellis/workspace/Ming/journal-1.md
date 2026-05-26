@@ -178,3 +178,41 @@ Added WS2812 RGB hardware layer, reactive red key effects, host Num Lock status 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: LVGL ST7789 status settings screen
+
+**Date**: 2026-05-26
+**Task**: LVGL ST7789 status settings screen
+**Branch**: `main`
+
+### Summary
+
+Added ST7789V/LVGL local status and settings screen with RGB coexistence, pure C status model tests, final NCS build verification, and display contracts.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9f8e296` | (see git log) |
+| `24500c5` | (see git log) |
+| `763bd13` | (see git log) |
+| `12a899d` | (see git log) |
+| `b42e6a0` | (see git log) |
+| `894e245` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

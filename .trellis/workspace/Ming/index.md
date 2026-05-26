@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
-- **Last Active**: 2026-05-24
+- **Total Sessions**: 6
+- **Last Active**: 2026-05-26
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~180 | Active |
+| `journal-1.md` | ~218 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-05-26 | LVGL ST7789 status settings screen | `9f8e296`, `24500c5`, `763bd13`, `12a899d`, `b42e6a0`, `894e245` | `main` |
 | 5 | 2026-05-24 | Implement RGB reactive lighting subsystem | `21ce438` | `main` |
 | 4 | 2026-05-24 | BLE BAS power state integration | `bd17548`, `d55f4d3`, `3510d25`, `c4e3fb1` | `feature/ble-bas-power-state-integration` |
 | 3 | 2026-05-23 | Fix power RTT diagnostics and NCS west workflow | `9d64b30` | `feature/ip5306-power-management` |
