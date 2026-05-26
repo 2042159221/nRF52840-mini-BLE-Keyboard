@@ -5,6 +5,7 @@ $ToolchainRoot = "E:\ncs\toolchains\fd21892d0f"
 $ToolchainBin = Join-Path $ToolchainRoot "opt\bin"
 $PythonScripts = Join-Path $ToolchainBin "Scripts"
 $ZephyrSdk = Join-Path $ToolchainRoot "opt\zephyr-sdk"
+$NrfutilBin = Join-Path $ToolchainRoot "nrfutil\bin"
 
 if (-not (Test-Path $NcsRoot)) {
     throw "NCS root not found: $NcsRoot"
@@ -24,6 +25,7 @@ $env:NCS_TOOLCHAIN_VERSION = "NONE"
 $pathEntries = @(
     $ToolchainBin,
     $PythonScripts,
+    $NrfutilBin,
     (Join-Path $ZephyrSdk "arm-zephyr-eabi\bin"),
     (Join-Path $ToolchainRoot "usr\bin"),
     (Join-Path $ToolchainRoot "bin")
