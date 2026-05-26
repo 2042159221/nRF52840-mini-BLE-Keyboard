@@ -45,3 +45,25 @@ def test_device_client_raises_config_set_response_error():
         client.set_config(DeviceConfig(rgb_brightness=101), apply=True, save=False)
 
     assert exc_info.value.code == ResponseCode.INVALID_PARAM
+
+
+def test_device_client_logs_connect_error():
+    class FailingTransport(MockTransport):
+        port = "COM19"
+
+        def open(self) -> None:
+            raise RuntimeError("open failed")
+
+    events = []
+    client = DeviceClient(
+        FailingTransport(),
+        log_handler=lambda event, fields: events.append((event, fields)),
+    )
+
+    with pytest.raises(RuntimeError, match="open failed"):
+        client.connect()
+
+    assert events[0] == ("connect_open", {"transport": "FailingTransport", "port": "COM19"})
+    assert events[-1][0] == "connect_error"
+    assert events[-1][1]["port"] == "COM19"
+    assert "open failed" in events[-1][1]["error"]

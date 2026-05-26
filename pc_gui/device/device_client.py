@@ -13,7 +13,19 @@ class DeviceClient:
         self.protocol = DeviceProtocol(transport, log_handler=log_handler)
 
     def connect(self) -> None:
-        self.transport.open()
+        port = getattr(self.transport, "port", "")
+        self._log("connect_open", transport=type(self.transport).__name__, port=port)
+        try:
+            self.transport.open()
+        except Exception as exc:
+            self._log(
+                "connect_error",
+                transport=type(self.transport).__name__,
+                port=port,
+                error=str(exc),
+            )
+            raise
+        self._log("connect_ready", transport=type(self.transport).__name__, port=port)
 
     def disconnect(self) -> None:
         self.transport.close()
@@ -64,3 +76,7 @@ class DeviceClient:
             usb_present=response.usb_present,
             charging=response.charging,
         )
+
+    def _log(self, event: str, **fields: int | str) -> None:
+        if self.protocol.log_handler is not None:
+            self.protocol.log_handler(event, fields)

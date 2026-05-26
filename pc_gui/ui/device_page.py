@@ -41,15 +41,22 @@ class DevicePage(QWidget):
     def connect_and_refresh(self) -> None:
         def connect_and_read(client):
             client.connect()
-            hello = client.hello()
-            config = client.get_config()
-            status = client.get_status()
-            return {"hello": hello, "config": config, "status": status}
+            try:
+                hello = client.hello()
+                config = client.get_config()
+                status = client.get_status()
+                return {"hello": hello, "config": config, "status": status}
+            except Exception:
+                client.disconnect()
+                raise
 
+        self.identity.setText("Connecting...")
+        self.status.setText("Opening USB CDC ACM")
         self.window.run_device_task(
             "connect",
             connect_and_read,
             self._show_connect_result,
+            self._show_connect_error,
         )
 
     def refresh_identity(self) -> None:
@@ -70,6 +77,10 @@ class DevicePage(QWidget):
         self.window.cached_config = result["config"]
         self._show_identity(result["hello"])
         self._show_status(result["status"])
+
+    def _show_connect_error(self, message: str) -> None:
+        self.identity.setText("Disconnected")
+        self.status.setText(message)
 
     def _show_identity(self, hello) -> None:
         self.identity.setText(

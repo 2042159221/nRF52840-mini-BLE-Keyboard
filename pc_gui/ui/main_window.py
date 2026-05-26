@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QMainWindow, QMessageBox, QTabWidget
 
 from pc_gui.device.device_client import DeviceClient
@@ -17,14 +18,18 @@ from .system_page import SystemPage
 
 
 class MainWindow(QMainWindow):
+    protocol_log = Signal(str, object)
+
     def __init__(self, client: DeviceClient) -> None:
         super().__init__()
         self.setWindowTitle("PRO BLE Mini Keyboard")
         self.client = client
         self.cached_config: DeviceConfig | None = None
         self._pending: dict[str, Callable[[object], None]] = {}
+        self._pending_errors: dict[str, Callable[[str], None]] = {}
         self.log_page = DeveloperLogPage()
-        self.client.protocol.log_handler = self.log_page.append_event
+        self.protocol_log.connect(self.log_page.append_event)
+        self.client.protocol.log_handler = self.protocol_log.emit
         self.worker_thread = DeviceWorkerThread(self.client)
         self.worker_thread.worker.result.connect(self._handle_worker_result)
         self.worker_thread.worker.error.connect(self._handle_worker_error)
@@ -42,9 +47,12 @@ class MainWindow(QMainWindow):
         name: str,
         job: Callable[[DeviceClient], Any],
         on_result: Callable[[object], None] | None = None,
+        on_error: Callable[[str], None] | None = None,
     ) -> None:
         if on_result is not None:
             self._pending[name] = on_result
+        if on_error is not None:
+            self._pending_errors[name] = on_error
         self.worker_thread.worker.submit(name, job)
 
     def current_config_copy(self) -> DeviceConfig | None:
@@ -76,6 +84,9 @@ class MainWindow(QMainWindow):
 
     def _handle_worker_error(self, name: str, message: str) -> None:
         self._pending.pop(name, None)
+        callback = self._pending_errors.pop(name, None)
+        if callback is not None:
+            callback(message)
         QMessageBox.warning(self, name.replace("_", " ").title(), message)
 
     def closeEvent(self, event) -> None:
