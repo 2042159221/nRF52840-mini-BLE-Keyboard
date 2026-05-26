@@ -91,6 +91,19 @@
 - The local UI theme is neutral utility styling: near-black background,
   charcoal surface, cyan focus/accent, green positive, amber warning, and gray
   secondary text. Avoid purple or single-hue decorative palettes.
+- Productized local UI polish must stay primitive and static:
+  - Home behaves as a compact dashboard answering mode, power/battery, RGB
+    state, NUM state, and encoder mapping at a glance.
+  - Settings/Edit/Confirm share a templated header with visible `Exit`, a cyan
+    left rail, and scanline/divider details built from LVGL objects.
+  - Focus uses a row background plus accent rail, not a separate behavior
+    model; changing focus styling must not change `status_screen_model.*`.
+  - Edit pages use a bounded meter made from boxes and labels, with visible
+    apply/cancel affordances.
+  - Confirm pages keep a warning band and only push red danger emphasis onto
+    the Confirm row when the model says Confirm is selected.
+  - Do not add bitmap assets, large fonts, animation threads, or direct
+    hardware reads to make the screen look richer.
 
 ### 4. Validation & Error Matrix
 
