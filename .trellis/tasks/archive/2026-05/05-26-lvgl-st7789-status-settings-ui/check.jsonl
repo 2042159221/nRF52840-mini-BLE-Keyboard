@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend embedded module guidelines index for verification."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "General firmware code quality checks."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Logging conventions for new display code."}
+{"file": ".trellis/spec/backend/rgb-lighting.md", "reason": "Verify RGB remains enabled and netlist constraints are preserved."}
+{"file": ".trellis/spec/backend/host-config-protocol.md", "reason": "Verify settings UI uses existing config and storage behavior."}
+{"file": ".trellis/spec/backend/hid-consumer-transport.md", "reason": "Verify EC11 HID consumer behavior is preserved outside UI mode."}
+{"file": ".trellis/tasks/05-26-lvgl-st7789-status-settings-ui/research/lvgl-st7789-zephyr-notes.md", "reason": "Verify implementation against LVGL/ST7789/RGB coexistence research."}

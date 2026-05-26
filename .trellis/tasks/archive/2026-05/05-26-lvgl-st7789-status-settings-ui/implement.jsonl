@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend embedded module guidelines index for firmware code changes."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "General firmware code quality guidance for implementation agents."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Logging level and diagnostic conventions for new display modules."}
+{"file": ".trellis/spec/backend/rgb-lighting.md", "reason": "RGB WS2812 contracts that must remain valid while adding ST7789 display."}
+{"file": ".trellis/spec/backend/host-config-protocol.md", "reason": "App config persistence and save/reset behavior used by local settings UI."}
+{"file": ".trellis/spec/backend/hid-consumer-transport.md", "reason": "Existing EC11/HID consumer behavior that UI mode must suspend and restore."}
+{"file": ".trellis/tasks/05-26-lvgl-st7789-status-settings-ui/research/lvgl-st7789-zephyr-notes.md", "reason": "LVGL, ST7789V, MIPI DBI, encoder input, and RGB coexistence notes for this task."}
