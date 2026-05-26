@@ -294,8 +294,8 @@ static void update_settings_page(const struct status_screen_snapshot *snapshot)
 	char rgb_value[32];
 	unsigned int focus = status_screen_model_settings_focus(&snapshot->ui);
 
-	(void)snprintf(rgb_value, sizeof(rgb_value), "%u%%",
-		       (unsigned int)snapshot->config.rgb_brightness);
+	(void)snprintf(rgb_value, sizeof(rgb_value), "%d%%",
+		       status_screen_model_edit_value(&snapshot->ui));
 
 	update_menu_row(&settings.rows[0], "Follow Hardware", focus == 0U);
 	update_menu_row(&settings.rows[1], rgb_value, focus == 1U);

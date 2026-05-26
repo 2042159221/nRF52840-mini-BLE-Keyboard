@@ -23,10 +23,12 @@ LOG_MODULE_REGISTER(status_screen, LOG_LEVEL_INF);
 static struct status_screen_snapshot status_snapshot;
 static struct status_screen_model status_model;
 static struct k_work status_refresh_work;
+static struct k_work status_action_work;
 static bool status_model_initialized;
 static bool status_screen_ready;
 
 K_MUTEX_DEFINE(status_snapshot_lock);
+K_MSGQ_DEFINE(status_action_msgq, sizeof(struct status_screen_event_result), 4, 4);
 
 #ifdef CONFIG_LVGL
 static const struct device *const display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
@@ -269,6 +271,39 @@ static void status_handle_model_action(const struct status_screen_event_result *
 	}
 }
 
+static void status_action_work_handler(struct k_work *work)
+{
+	struct status_screen_event_result result;
+
+	ARG_UNUSED(work);
+
+	while (k_msgq_get(&status_action_msgq, &result, K_NO_WAIT) == 0) {
+		status_handle_model_action(&result);
+	}
+}
+
+static void status_queue_model_action(const struct status_screen_event_result *result)
+{
+	int err;
+
+	if (result == NULL) {
+		return;
+	}
+
+	if (result->action != STATUS_SCREEN_ACTION_APPLY_RGB_BRIGHTNESS &&
+	    result->action != STATUS_SCREEN_ACTION_FACTORY_RESET_CONFIRMED) {
+		return;
+	}
+
+	err = k_msgq_put(&status_action_msgq, result, K_NO_WAIT);
+	if (err != 0) {
+		LOG_WRN("status screen action queue full: %d", err);
+		return;
+	}
+
+	k_work_submit(&status_action_work);
+}
+
 static bool status_screen_handle_model_input(enum status_screen_input input)
 {
 	struct status_screen_event_result result;
@@ -287,7 +322,7 @@ static bool status_screen_handle_model_input(enum status_screen_input input)
 		   result.action != STATUS_SCREEN_ACTION_HID_PASSTHROUGH);
 	k_mutex_unlock(&status_snapshot_lock);
 
-	status_handle_model_action(&result);
+	status_queue_model_action(&result);
 
 	if (refresh) {
 		status_schedule_refresh();
@@ -359,6 +394,7 @@ int status_screen_init(void)
 	}
 
 	k_work_init(&status_refresh_work, status_refresh_work_handler);
+	k_work_init(&status_action_work, status_action_work_handler);
 	k_work_init_delayable(&status_lvgl_timer_work, status_lvgl_timer_work_handler);
 	status_load_initial_snapshot();
 
